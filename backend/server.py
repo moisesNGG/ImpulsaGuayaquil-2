@@ -528,6 +528,39 @@ async def get_user(user_id: str, current_user: User = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="User not found")
     return UserResponse(**user)
 
+@api_router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(user_id: str, user_data: UserUpdate, current_user: User = Depends(get_admin_user)):
+    """Update user data (Admin only)"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Remove None values
+    update_data = {k: v for k, v in user_data.dict().items() if v is not None}
+    if update_data:
+        update_data["updated_at"] = datetime.utcnow()
+        await db.users.update_one({"id": user_id}, {"$set": update_data})
+    
+    updated_user = await db.users.find_one({"id": user_id})
+    return UserResponse(**updated_user)
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, current_user: User = Depends(get_admin_user)):
+    """Delete user (Admin only)"""
+    # Don't allow admin to delete themselves
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Clean up user data
+    await db.notifications.delete_many({"user_id": user_id})
+    await db.mission_attempts.delete_many({"user_id": user_id})
+    
+    return {"message": "User deleted successfully"}
+
 @api_router.put("/users/{user_id}/profile-picture")
 async def update_profile_picture(user_id: str, profile_data: dict, current_user: User = Depends(get_current_user)):
     # Users can only update their own profile picture, unless they're admin
@@ -552,6 +585,73 @@ async def update_profile_picture(user_id: str, profile_data: dict, current_user:
     # Return updated user
     updated_user = await db.users.find_one({"id": user_id})
     return UserResponse(**updated_user)
+
+@api_router.post("/users/{user_id}/favorite-reward")
+async def toggle_favorite_reward(user_id: str, reward_data: dict, current_user: User = Depends(get_current_user)):
+    """Toggle favorite reward for user"""
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    reward_id = reward_data.get("reward_id")
+    if not reward_id:
+        raise HTTPException(status_code=400, detail="Reward ID is required")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    favorites = user.get("favorite_rewards", [])
+    
+    if reward_id in favorites:
+        # Remove from favorites
+        favorites.remove(reward_id)
+        action = "removed"
+    else:
+        # Add to favorites
+        favorites.append(reward_id)
+        action = "added"
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"favorite_rewards": favorites, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": f"Reward {action} to/from favorites", "favorites": favorites}
+
+@api_router.get("/users/{user_id}/stats", response_model=UserStats)
+async def get_user_stats(user_id: str, current_user: User = Depends(get_current_user)):
+    """Get user statistics"""
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get achievements count
+    achievements = await db.achievements.find().to_list(100)
+    earned_achievements = 0
+    for achievement in achievements:
+        if await check_achievement_eligibility(User(**user), Achievement(**achievement)):
+            earned_achievements += 1
+    
+    completion_rate = 0
+    if user.get("total_missions_attempted", 0) > 0:
+        completion_rate = (user.get("total_missions_completed", 0) / user.get("total_missions_attempted", 0)) * 100
+    
+    return UserStats(
+        user_id=user_id,
+        total_points=user.get("points", 0),
+        total_missions_completed=user.get("total_missions_completed", 0),
+        total_missions_attempted=user.get("total_missions_attempted", 0),
+        current_streak=user.get("current_streak", 0),
+        best_streak=user.get("best_streak", 0),
+        rank=user.get("rank", UserRank.EMPRENDEDOR_NOVATO),
+        achievements_earned=earned_achievements,
+        favorite_rewards_count=len(user.get("favorite_rewards", [])),
+        completion_rate=completion_rate,
+        last_activity=user.get("updated_at", user.get("created_at"))
+    )
 
 # Mission routes
 @api_router.post("/missions", response_model=Mission)
