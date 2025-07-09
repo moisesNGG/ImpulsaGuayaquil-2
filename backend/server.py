@@ -974,14 +974,36 @@ async def delete_reward(reward_id: str, current_user: User = Depends(get_admin_u
 
 # Event routes
 @api_router.post("/events", response_model=Event)
-async def create_event(event: Event, current_user: User = Depends(get_admin_user)):
-    await db.events.insert_one(event.dict())
-    return event
+async def create_event(event: EventCreate, current_user: User = Depends(get_admin_user)):
+    new_event = Event(**event.dict())
+    await db.events.insert_one(new_event.dict())
+    return new_event
 
 @api_router.get("/events", response_model=List[Event])
 async def get_events():
     events = await db.events.find().sort("date", 1).to_list(100)
     return [Event(**event) for event in events]
+
+@api_router.put("/events/{event_id}", response_model=Event)
+async def update_event(event_id: str, event_data: EventUpdate, current_user: User = Depends(get_admin_user)):
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Remove None values
+    update_data = {k: v for k, v in event_data.dict().items() if v is not None}
+    if update_data:
+        await db.events.update_one({"id": event_id}, {"$set": update_data})
+    
+    updated_event = await db.events.find_one({"id": event_id})
+    return Event(**updated_event)
+
+@api_router.delete("/events/{event_id}")
+async def delete_event(event_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.events.delete_one({"id": event_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Event deleted successfully"}
 
 # Admin routes
 @api_router.get("/admin/stats", response_model=AdminStats)
