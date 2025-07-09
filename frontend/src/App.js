@@ -1740,6 +1740,26 @@ const AdminPanel = () => {
               Logros
             </button>
             <button
+              onClick={() => setActiveTab('rewards')}
+              className={`px-4 py-2 rounded-lg font-medium ${
+                activeTab === 'rewards'
+                  ? 'bg-cyan-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Recompensas
+            </button>
+            <button
+              onClick={() => setActiveTab('events')}
+              className={`px-4 py-2 rounded-lg font-medium ${
+                activeTab === 'events'
+                  ? 'bg-cyan-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Eventos
+            </button>
+            <button
               onClick={logout}
               className="px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700"
             >
