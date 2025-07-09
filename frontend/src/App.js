@@ -2318,41 +2318,7 @@ const UserApp = () => {
         
       case 'perfil':
         return (
-          <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-gray-800">Mi Perfil</h3>
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-              <div className="flex items-center space-x-6 mb-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-4xl text-white">
-                  {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
-                </div>
-                <div>
-                  <h4 className="text-xl font-bold text-gray-800">{user?.nombre} {user?.apellido}</h4>
-                  <p className="text-gray-600">{user?.email}</p>
-                  <p className="text-gray-600">C.I: {user?.cedula}</p>
-                  <p className="text-cyan-600 font-medium">{user?.rank?.replace('_', ' ').toUpperCase()}</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-800">{user?.points || 0}</div>
-                  <div className="text-sm text-gray-600">Puntos Totales</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-2xl font-bold text-gray-800">{user?.completed_missions?.length || 0}</div>
-                  <div className="text-sm text-gray-600">Misiones Completadas</div>
-                </div>
-              </div>
-              
-              <div className="border-t pt-4">
-                <h5 className="font-bold text-gray-800 mb-2">Información del Emprendimiento</h5>
-                <p className="text-gray-600 mb-4">{user?.nombre_emprendimiento}</p>
-                
-                <h5 className="font-bold text-gray-800 mb-2">Fecha de Registro</h5>
-                <p className="text-gray-600">{user?.created_at ? new Date(user.created_at).toLocaleDateString('es-EC') : 'N/A'}</p>
-              </div>
-            </div>
-          </div>
+          <ProfileSection user={user} />
         );
         
       default:
