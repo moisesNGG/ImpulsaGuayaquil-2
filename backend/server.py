@@ -245,6 +245,39 @@ class MissionCompletion(BaseModel):
     mission_id: str
     completion_data: Dict[str, Any] = {}
 
+class MissionAttempt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    mission_id: str
+    status: MissionAttemptStatus
+    score: Optional[float] = None
+    answers: Dict[str, Any] = {}
+    attempt_date: datetime = Field(default_factory=datetime.utcnow)
+    can_retry_after: Optional[datetime] = None
+
+class Notification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    type: NotificationType
+    title: str
+    message: str
+    data: Dict[str, Any] = {}
+    read: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserStats(BaseModel):
+    user_id: str
+    total_points: int
+    total_missions_completed: int
+    total_missions_attempted: int
+    current_streak: int
+    best_streak: int
+    rank: UserRank
+    achievements_earned: int
+    favorite_rewards_count: int
+    completion_rate: float
+    last_activity: datetime
+
 class Achievement(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
