@@ -369,13 +369,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Authentication system with JWT tokens"
-    - "Admin user creation and management"
-    - "User registration with complete fields"
-    - "Admin routes for mission CRUD operations"
-    - "Role-based access control"
-    - "Achievement CRUD operations"
-    - "Profile picture update functionality"
+    - "Enhanced User Management (Admin only)"
+    - "Enhanced Mission System"
+    - "Achievement Eligibility System"
+    - "Enhanced Reward System"
+    - "Enhanced Event System"
+    - "Notification System"
+    - "Leaderboard System"
+    - "Enhanced Admin Stats"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
