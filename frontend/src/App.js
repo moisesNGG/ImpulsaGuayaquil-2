@@ -974,15 +974,17 @@ const AdminPanel = () => {
 
   const loadAdminData = async () => {
     try {
-      const [missionsRes, usersRes, statsRes] = await Promise.all([
+      const [missionsRes, usersRes, statsRes, achievementsRes] = await Promise.all([
         axios.get(`${API}/missions`),
         axios.get(`${API}/users`),
-        axios.get(`${API}/admin/stats`)
+        axios.get(`${API}/admin/stats`),
+        axios.get(`${API}/achievements`)
       ]);
       
       setMissions(missionsRes.data);
       setUsers(usersRes.data);
       setStats(statsRes.data);
+      setAchievements(achievementsRes.data);
     } catch (error) {
       console.error('Error loading admin data:', error);
     } finally {
