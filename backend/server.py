@@ -274,17 +274,20 @@ async def check_achievement_eligibility(user: User, achievement: "Achievement") 
         return len(user.completed_missions) >= 1
     elif achievement.condition == "complete_5_missions":
         return len(user.completed_missions) >= 5
-    elif achievement.condition == "reach_100_points":
+    elif achievement.condition == "complete_10_missions":
+        return len(user.completed_missions) >= 10
+    elif achievement.condition == "earn_100_points":
         return user.points >= 100
-    elif achievement.condition == "reach_500_points":
+    elif achievement.condition == "earn_500_points":
         return user.points >= 500
-    elif achievement.condition == "reach_1000_points":
+    elif achievement.condition == "earn_1000_points":
         return user.points >= 1000
-    elif achievement.condition == "streak_5_days":
-        return user.current_streak >= 5
-    elif achievement.condition == "streak_10_days":
-        return user.current_streak >= 10
-    # Add more conditions as needed
+    elif achievement.condition == "streak_3_days":
+        return user.current_streak >= 3
+    elif achievement.condition == "streak_7_days":
+        return user.current_streak >= 7
+    elif achievement.condition == "streak_30_days":
+        return user.current_streak >= 30
     return False
 
 async def update_user_streak(user_id: str):
