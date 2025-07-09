@@ -1685,6 +1685,170 @@ const AdminPanel = () => {
     </div>
   );
 
+  const renderRewards = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Gestión de Recompensas</h3>
+        <button
+          onClick={handleCreateReward}
+          className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-cyan-600 hover:to-blue-700 flex items-center space-x-2"
+        >
+          <PlusIcon />
+          <span>Nueva Recompensa</span>
+        </button>
+      </div>
+      
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Recompensa</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Costo</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Enlace</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {rewards.map((reward) => (
+                <tr key={reward.id} className="hover:bg-gray-50">
+                  <td className="py-4 px-6">
+                    <div>
+                      <div className="font-medium text-gray-900">{reward.title}</div>
+                      <div className="text-sm text-gray-500">{reward.description}</div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center space-x-1">
+                      <StarIcon />
+                      <span className="text-sm text-gray-700">{reward.points_cost}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-sm text-gray-600">
+                      {reward.external_url ? (
+                        <a
+                          href={reward.external_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          Ver enlace
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">Sin enlace</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditReward(reward)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReward(reward.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderEvents = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Gestión de Eventos</h3>
+        <button
+          onClick={handleCreateEvent}
+          className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-cyan-600 hover:to-blue-700 flex items-center space-x-2"
+        >
+          <PlusIcon />
+          <span>Nuevo Evento</span>
+        </button>
+      </div>
+      
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Evento</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Fecha</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Ubicación</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Registro</th>
+                <th className="text-left py-3 px-6 font-medium text-gray-900">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {events.map((event) => (
+                <tr key={event.id} className="hover:bg-gray-50">
+                  <td className="py-4 px-6">
+                    <div>
+                      <div className="font-medium text-gray-900">{event.title}</div>
+                      <div className="text-sm text-gray-500">{event.description}</div>
+                      <div className="text-sm text-gray-400">Por: {event.organizer}</div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-sm text-gray-600">
+                      {new Date(event.date).toLocaleDateString('es-EC')}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-sm text-gray-600">{event.location}</div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="text-sm text-gray-600">
+                      {event.registration_url ? (
+                        <a
+                          href={event.registration_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          Ver enlace
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">Sin enlace</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditEvent(event)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteEvent(event.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
