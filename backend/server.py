@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,8 +9,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
+import jwt
+from passlib.context import CryptContext
+import hashlib
 
 
 ROOT_DIR = Path(__file__).parent
@@ -20,8 +24,16 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Security
+SECRET_KEY = "impulsa-guayaquil-secret-key-2025"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
 # Create the main app without a prefix
-app = FastAPI(title="Impulsa Guayaquil API", version="1.0.0")
+app = FastAPI(title="Impulsa Guayaquil API", version="2.0.0")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -51,11 +63,64 @@ class UserRank(str, Enum):
     EMPRENDEDOR_EXPERTO = "emprendedor_experto"
     EMPRENDEDOR_MASTER = "emprendedor_master"
 
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    EMPRENDEDOR = "emprendedor"
+
+# Security functions
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+    user = await db.users.find_one({"id": user_id})
+    if user is None:
+        raise credentials_exception
+    return User(**user)
+
+async def get_admin_user(current_user: User = Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user
+
 # Models
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
+    nombre: str
+    apellido: str
+    cedula: str
     email: str
+    nombre_emprendimiento: str
+    hashed_password: str
+    role: UserRole = UserRole.EMPRENDEDOR
     points: int = 0
     rank: UserRank = UserRank.EMPRENDEDOR_NOVATO
     completed_missions: List[str] = []
@@ -63,8 +128,35 @@ class User(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserCreate(BaseModel):
-    name: str
+    nombre: str
+    apellido: str
+    cedula: str
     email: str
+    nombre_emprendimiento: str
+    password: str
+
+class UserLogin(BaseModel):
+    cedula: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    nombre: str
+    apellido: str
+    cedula: str
+    email: str
+    nombre_emprendimiento: str
+    role: UserRole
+    points: int
+    rank: UserRank
+    completed_missions: List[str]
+    created_at: datetime
+    updated_at: datetime
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
 
 class QuizQuestion(BaseModel):
     question: str
@@ -77,10 +169,11 @@ class Mission(BaseModel):
     description: str
     type: MissionType
     points_reward: int
-    position: int  # Position in the path (1, 2, 3, etc.)
-    content: Dict[str, Any] = {}  # Flexible content based on mission type
-    requirements: List[str] = []  # Mission IDs that must be completed first
+    position: int
+    content: Dict[str, Any] = {}
+    requirements: List[str] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str = ""
     
 class MissionCreate(BaseModel):
     title: str
@@ -90,6 +183,15 @@ class MissionCreate(BaseModel):
     position: int
     content: Dict[str, Any] = {}
     requirements: List[str] = []
+
+class MissionUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[MissionType] = None
+    points_reward: Optional[int] = None
+    position: Optional[int] = None
+    content: Optional[Dict[str, Any]] = None
+    requirements: Optional[List[str]] = None
 
 class MissionWithStatus(BaseModel):
     id: str
@@ -105,7 +207,6 @@ class MissionWithStatus(BaseModel):
 
 class MissionCompletion(BaseModel):
     mission_id: str
-    user_id: str
     completion_data: Dict[str, Any] = {}
 
 class Achievement(BaseModel):
@@ -113,7 +214,7 @@ class Achievement(BaseModel):
     title: str
     description: str
     icon: str
-    condition: str  # e.g., "complete_5_missions", "reach_100_points"
+    condition: str
     points_required: int = 0
     missions_required: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -122,7 +223,7 @@ class Reward(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     description: str
-    type: str  # "badge", "discount", "certificate", etc.
+    type: str
     value: str
     points_cost: int
     available_until: Optional[datetime] = None
@@ -139,34 +240,93 @@ class Event(BaseModel):
     registered_users: List[str] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class AdminStats(BaseModel):
+    total_users: int
+    total_missions: int
+    total_completed_missions: int
+    total_points_awarded: int
+    active_users_last_week: int
+    most_popular_missions: List[Dict[str, Any]]
+
 # Routes
 @api_router.get("/")
 async def root():
     return {"message": "Impulsa Guayaquil API - Empowering Entrepreneurs"}
 
-# User routes
-@api_router.post("/users", response_model=User)
-async def create_user(user_data: UserCreate):
-    user = User(**user_data.dict())
+# Authentication routes
+@api_router.post("/register", response_model=UserResponse)
+async def register(user_data: UserCreate):
+    # Check if user already exists
+    existing_user = await db.users.find_one({"$or": [{"cedula": user_data.cedula}, {"email": user_data.email}]})
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="User with this cedula or email already exists"
+        )
+    
+    # Create user
+    hashed_password = get_password_hash(user_data.password)
+    user = User(
+        nombre=user_data.nombre,
+        apellido=user_data.apellido,
+        cedula=user_data.cedula,
+        email=user_data.email,
+        nombre_emprendimiento=user_data.nombre_emprendimiento,
+        hashed_password=hashed_password
+    )
+    
     await db.users.insert_one(user.dict())
-    return user
+    
+    return UserResponse(**user.dict())
 
-@api_router.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: str):
+@api_router.post("/login", response_model=Token)
+async def login(user_credentials: UserLogin):
+    user = await db.users.find_one({"cedula": user_credentials.cedula})
+    if not user or not verify_password(user_credentials.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect cedula or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["id"]}, expires_delta=access_token_expires
+    )
+    
+    user_response = UserResponse(**user)
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
+
+@api_router.get("/me", response_model=UserResponse)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    return UserResponse(**current_user.dict())
+
+# User routes
+@api_router.get("/users", response_model=List[UserResponse])
+async def get_users(current_user: User = Depends(get_admin_user)):
+    users = await db.users.find().to_list(100)
+    return [UserResponse(**user) for user in users]
+
+@api_router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: str, current_user: User = Depends(get_current_user)):
+    # Users can only see their own profile, unless they're admin
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return User(**user)
-
-@api_router.get("/users", response_model=List[User])
-async def get_users():
-    users = await db.users.find().to_list(100)
-    return [User(**user) for user in users]
+    return UserResponse(**user)
 
 # Mission routes
 @api_router.post("/missions", response_model=Mission)
-async def create_mission(mission_data: MissionCreate):
-    mission = Mission(**mission_data.dict())
+async def create_mission(mission_data: MissionCreate, current_user: User = Depends(get_admin_user)):
+    mission = Mission(**mission_data.dict(), created_by=current_user.id)
     await db.missions.insert_one(mission.dict())
     return mission
 
@@ -175,8 +335,32 @@ async def get_missions():
     missions = await db.missions.find().sort("position", 1).to_list(100)
     return [Mission(**mission) for mission in missions]
 
+@api_router.put("/missions/{mission_id}", response_model=Mission)
+async def update_mission(mission_id: str, mission_data: MissionUpdate, current_user: User = Depends(get_admin_user)):
+    mission = await db.missions.find_one({"id": mission_id})
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    
+    update_data = {k: v for k, v in mission_data.dict().items() if v is not None}
+    if update_data:
+        await db.missions.update_one({"id": mission_id}, {"$set": update_data})
+    
+    updated_mission = await db.missions.find_one({"id": mission_id})
+    return Mission(**updated_mission)
+
+@api_router.delete("/missions/{mission_id}")
+async def delete_mission(mission_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.missions.delete_one({"id": mission_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return {"message": "Mission deleted successfully"}
+
 @api_router.get("/missions/{user_id}/with-status", response_model=List[MissionWithStatus])
-async def get_missions_with_status(user_id: str):
+async def get_missions_with_status(user_id: str, current_user: User = Depends(get_current_user)):
+    # Users can only see their own missions, unless they're admin
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -215,8 +399,8 @@ async def get_missions_with_status(user_id: str):
     return missions_with_status
 
 @api_router.post("/missions/complete")
-async def complete_mission(completion: MissionCompletion):
-    user = await db.users.find_one({"id": completion.user_id})
+async def complete_mission(completion: MissionCompletion, current_user: User = Depends(get_current_user)):
+    user = await db.users.find_one({"id": current_user.id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -244,7 +428,7 @@ async def complete_mission(completion: MissionCompletion):
         rank = UserRank.EMPRENDEDOR_JUNIOR
     
     await db.users.update_one(
-        {"id": completion.user_id},
+        {"id": current_user.id},
         {
             "$set": {
                 "points": new_points,
@@ -259,7 +443,7 @@ async def complete_mission(completion: MissionCompletion):
 
 # Achievement routes
 @api_router.post("/achievements", response_model=Achievement)
-async def create_achievement(achievement: Achievement):
+async def create_achievement(achievement: Achievement, current_user: User = Depends(get_admin_user)):
     await db.achievements.insert_one(achievement.dict())
     return achievement
 
@@ -270,7 +454,7 @@ async def get_achievements():
 
 # Reward routes
 @api_router.post("/rewards", response_model=Reward)
-async def create_reward(reward: Reward):
+async def create_reward(reward: Reward, current_user: User = Depends(get_admin_user)):
     await db.rewards.insert_one(reward.dict())
     return reward
 
@@ -281,7 +465,7 @@ async def get_rewards():
 
 # Event routes
 @api_router.post("/events", response_model=Event)
-async def create_event(event: Event):
+async def create_event(event: Event, current_user: User = Depends(get_admin_user)):
     await db.events.insert_one(event.dict())
     return event
 
@@ -290,9 +474,60 @@ async def get_events():
     events = await db.events.find().sort("date", 1).to_list(100)
     return [Event(**event) for event in events]
 
+# Admin routes
+@api_router.get("/admin/stats", response_model=AdminStats)
+async def get_admin_stats(current_user: User = Depends(get_admin_user)):
+    # Calculate stats
+    total_users = await db.users.count_documents({})
+    total_missions = await db.missions.count_documents({})
+    
+    # Get all users to calculate completed missions and points
+    users = await db.users.find().to_list(1000)
+    total_completed_missions = sum(len(user.get("completed_missions", [])) for user in users)
+    total_points_awarded = sum(user.get("points", 0) for user in users)
+    
+    # Active users last week (simplified - users with points > 0)
+    active_users_last_week = await db.users.count_documents({"points": {"$gt": 0}})
+    
+    # Most popular missions (simplified - first 5 missions)
+    missions = await db.missions.find().sort("position", 1).limit(5).to_list(5)
+    most_popular_missions = [
+        {
+            "id": mission["id"],
+            "title": mission["title"],
+            "completions": 0  # Would need to implement completion tracking
+        }
+        for mission in missions
+    ]
+    
+    return AdminStats(
+        total_users=total_users,
+        total_missions=total_missions,
+        total_completed_missions=total_completed_missions,
+        total_points_awarded=total_points_awarded,
+        active_users_last_week=active_users_last_week,
+        most_popular_missions=most_popular_missions
+    )
+
 # Initialize sample data
 @api_router.post("/initialize-data")
 async def initialize_sample_data():
+    # Create admin user if it doesn't exist
+    admin_user = await db.users.find_one({"cedula": "0000000000"})
+    if not admin_user:
+        admin = User(
+            nombre="Admin",
+            apellido="Sistema",
+            cedula="0000000000",
+            email="admin@impulsa.guayaquil.ec",
+            nombre_emprendimiento="Sistema Impulsa Guayaquil",
+            hashed_password=get_password_hash("admin"),
+            role=UserRole.ADMIN,
+            points=9999,
+            rank=UserRank.EMPRENDEDOR_MASTER
+        )
+        await db.users.insert_one(admin.dict())
+    
     # Clear existing data
     await db.missions.delete_many({})
     await db.achievements.delete_many({})
@@ -312,7 +547,8 @@ async def initialize_sample_data():
                 "max_duration": 60,
                 "topics": ["Tu nombre", "Tu emprendimiento", "Tu motivación", "Tu visión para Guayaquil"]
             },
-            "requirements": []
+            "requirements": [],
+            "created_by": "system"
         },
         {
             "title": "Mini-Quiz: Fundamentos del Emprendimiento",
@@ -339,7 +575,8 @@ async def initialize_sample_data():
                     }
                 ]
             },
-            "requirements": ["1"]
+            "requirements": [],
+            "created_by": "system"
         },
         {
             "title": "Guía Descargable: Trámites Legales",
@@ -352,7 +589,8 @@ async def initialize_sample_data():
                 "topics": ["RUC", "IESS", "Permisos municipales", "Patentes"],
                 "completion_requirement": "Confirmar lectura y responder pregunta final"
             },
-            "requirements": ["2"]
+            "requirements": [],
+            "created_by": "system"
         },
         {
             "title": "Tarea Práctica: Plan de Negocio Básico",
@@ -370,7 +608,8 @@ async def initialize_sample_data():
                 ],
                 "deadline_hours": 48
             },
-            "requirements": ["3"]
+            "requirements": [],
+            "created_by": "system"
         },
         {
             "title": "Consejo Experto: Networking en Guayaquil",
@@ -389,7 +628,8 @@ async def initialize_sample_data():
                     "Seguimiento efectivo de contactos"
                 ]
             },
-            "requirements": ["4"]
+            "requirements": [],
+            "created_by": "system"
         }
     ]
     
