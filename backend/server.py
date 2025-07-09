@@ -155,24 +155,28 @@ async def get_admin_user(current_user: "User" = Depends(get_current_user)) -> "U
 # Models
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    cedula: str
     nombre: str
     apellido: str
-    cedula: str
     email: str
     nombre_emprendimiento: str
     hashed_password: str
     role: UserRole = UserRole.EMPRENDEDOR
-    points: int = 0
     rank: UserRank = UserRank.EMPRENDEDOR_NOVATO
+    points: int = 0
+    level: UserLevel = UserLevel.NOVATO
+    level_points: int = 0  # Points within current level
     completed_missions: List[str] = []
-    profile_picture: Optional[str] = None  # Base64 encoded image
+    failed_missions: Dict[str, datetime] = {}
+    profile_picture: Optional[str] = None
+    favorite_rewards: List[str] = []
     current_streak: int = 0
     best_streak: int = 0
     last_mission_date: Optional[datetime] = None
-    favorite_rewards: List[str] = []
-    failed_missions: Dict[str, datetime] = {}  # mission_id -> failed_date
-    total_missions_attempted: int = 0
-    total_missions_completed: int = 0
+    last_activity: datetime = Field(default_factory=datetime.utcnow)
+    badges: List[str] = []  # List of badge IDs
+    inactive_warning_sent: bool = False
+    streak_warning_sent: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
