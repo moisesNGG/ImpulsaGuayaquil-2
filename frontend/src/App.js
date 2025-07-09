@@ -2748,7 +2748,25 @@ const UserApp = () => {
                         <span className="text-sm text-gray-700">{reward.points_cost} puntos</span>
                       </div>
                     </div>
-                    <button className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg hover:from-cyan-600 hover:to-blue-700">
+                    <button 
+                      onClick={() => {
+                        if (user?.points >= reward.points_cost) {
+                          if (reward.external_url) {
+                            window.open(reward.external_url, '_blank');
+                          } else {
+                            alert('Este premio no tiene enlace de canje configurado');
+                          }
+                        } else {
+                          alert(`Necesitas ${reward.points_cost - (user?.points || 0)} puntos más para canjear esta recompensa`);
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        user?.points >= reward.points_cost
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:from-cyan-600 hover:to-blue-700'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                      disabled={user?.points < reward.points_cost}
+                    >
                       Canjear
                     </button>
                   </div>
