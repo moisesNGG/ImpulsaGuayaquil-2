@@ -1252,7 +1252,82 @@ async def initialize_sample_data():
         mission = Mission(**mission_data)
         await db.missions.insert_one(mission.dict())
     
-    # Create sample achievements
+    # Create sample rewards
+    sample_rewards = [
+        {
+            "title": "Certificado de Emprendedor Novato",
+            "description": "Certificado digital que acredita tu participación en el programa",
+            "type": "certificate",
+            "value": "PDF Certificate",
+            "points_cost": 50,
+            "external_url": "https://impulsa.guayaquil.gob.ec/certificado-novato"
+        },
+        {
+            "title": "Descuento en Consultoría",
+            "description": "20% de descuento en servicios de consultoría empresarial",
+            "type": "discount",
+            "value": "20% off",
+            "points_cost": 150,
+            "external_url": "https://impulsa.guayaquil.gob.ec/consultoria-descuento"
+        },
+        {
+            "title": "Entrada VIP a Evento",
+            "description": "Entrada prioritaria al próximo evento de emprendimiento en Guayaquil",
+            "type": "event_access",
+            "value": "VIP Access",
+            "points_cost": 200,
+            "external_url": "https://impulsa.guayaquil.gob.ec/evento-vip"
+        },
+        {
+            "title": "Mentoría Personalizada",
+            "description": "Sesión de mentoría 1:1 con experto en emprendimiento",
+            "type": "mentorship",
+            "value": "1 hour session",
+            "points_cost": 300,
+            "external_url": "https://impulsa.guayaquil.gob.ec/mentoria-personalizada"
+        }
+    ]
+    
+    for reward_data in sample_rewards:
+        reward = Reward(**reward_data)
+        await db.rewards.insert_one(reward.dict())
+    
+    # Create sample events
+    sample_events = [
+        {
+            "title": "Feria de Emprendimiento Guayaquil 2025",
+            "description": "Evento anual donde los emprendedores pueden mostrar sus proyectos",
+            "location": "Centro de Convenciones de Guayaquil",
+            "date": datetime(2025, 8, 15, 9, 0),
+            "organizer": "Cámara de Comercio de Guayaquil",
+            "capacity": 500,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/feria-emprendimiento-2025"
+        },
+        {
+            "title": "Workshop: Marketing Digital para Emprendedores",
+            "description": "Taller intensivo sobre estrategias de marketing digital",
+            "location": "ESPOL - Guayaquil",
+            "date": datetime(2025, 8, 5, 14, 0),
+            "organizer": "ESPOL Entrepreneurship Center",
+            "capacity": 50,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/workshop-marketing-digital"
+        },
+        {
+            "title": "Networking: Conecta con Inversores",
+            "description": "Evento de networking exclusivo para emprendedores y inversores",
+            "location": "Hotel Hilton Colon Guayaquil",
+            "date": datetime(2025, 8, 20, 18, 0),
+            "organizer": "Angel Investors Guayaquil",
+            "capacity": 100,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/networking-inversores"
+        }
+    ]
+    
+    for event_data in sample_events:
+        event = Event(**event_data)
+        await db.events.insert_one(event.dict())
+    
+    # Create enhanced achievements
     sample_achievements = [
         {
             "title": "Primer Paso",
@@ -1274,65 +1349,36 @@ async def initialize_sample_data():
             "icon": "🏆",
             "condition": "reach_100_points",
             "points_required": 100
-        }
-    ]
-    
-    for achievement_data in sample_achievements:
-        achievement = Achievement(**achievement_data)
-        await db.achievements.insert_one(achievement.dict())
-    
-    # Create sample rewards
-    sample_rewards = [
-        {
-            "title": "Certificado de Emprendedor Novato",
-            "description": "Certificado digital que acredita tu participación en el programa",
-            "type": "certificate",
-            "value": "PDF Certificate",
-            "points_cost": 50
         },
         {
-            "title": "Descuento en Consultoría",
-            "description": "20% de descuento en servicios de consultoría empresarial",
-            "type": "discount",
-            "value": "20% off",
-            "points_cost": 150
+            "title": "Emprendedor Experimentado",
+            "description": "Alcanzaste 500 puntos",
+            "icon": "💎",
+            "condition": "reach_500_points",
+            "points_required": 500
         },
         {
-            "title": "Entrada VIP a Evento",
-            "description": "Entrada prioritaria al próximo evento de emprendimiento en Guayaquil",
-            "type": "event_access",
-            "value": "VIP Access",
-            "points_cost": 200
-        }
-    ]
-    
-    for reward_data in sample_rewards:
-        reward = Reward(**reward_data)
-        await db.rewards.insert_one(reward.dict())
-    
-    # Create sample events
-    sample_events = [
-        {
-            "title": "Feria de Emprendimiento Guayaquil 2025",
-            "description": "Evento anual donde los emprendedores pueden mostrar sus proyectos",
-            "location": "Centro de Convenciones de Guayaquil",
-            "date": datetime(2025, 8, 15, 9, 0),
-            "organizer": "Cámara de Comercio de Guayaquil",
-            "capacity": 500
+            "title": "Maestro Emprendedor",
+            "description": "Alcanzaste 1000 puntos",
+            "icon": "👑",
+            "condition": "reach_1000_points",
+            "points_required": 1000
         },
         {
-            "title": "Workshop: Marketing Digital para Emprendedores",
-            "description": "Taller intensivo sobre estrategias de marketing digital",
-            "location": "ESPOL - Guayaquil",
-            "date": datetime(2025, 8, 5, 14, 0),
-            "organizer": "ESPOL Entrepreneurship Center",
-            "capacity": 50
+            "title": "Racha de Fuego",
+            "description": "Mantén una racha de 5 días completando misiones",
+            "icon": "🔥",
+            "condition": "streak_5_days",
+            "missions_required": 5
+        },
+        {
+            "title": "Imparable",
+            "description": "Mantén una racha de 10 días completando misiones",
+            "icon": "⚡",
+            "condition": "streak_10_days",
+            "missions_required": 10
         }
     ]
-    
-    for event_data in sample_events:
-        event = Event(**event_data)
-        await db.events.insert_one(event.dict())
     
     return {"message": "Sample data initialized successfully"}
 
