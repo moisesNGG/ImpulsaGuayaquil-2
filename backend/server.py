@@ -381,6 +381,34 @@ class Notification(BaseModel):
     read: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class Badge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    icon: str
+    category: BadgeCategory
+    rarity: BadgeRarity
+    condition: str
+    points_reward: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserBadge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    badge_id: str
+    earned_at: datetime = Field(default_factory=datetime.utcnow)
+    progress: float = 1.0  # 1.0 means fully earned
+
+class UserSettings(BaseModel):
+    user_id: str
+    dark_mode: bool = False
+    notifications_enabled: bool = True
+    push_notifications: bool = True
+    email_notifications: bool = True
+    streak_warnings: bool = True
+    inactivity_warnings: bool = True
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 class UserStats(BaseModel):
     user_id: str
     total_points: int
