@@ -742,34 +742,154 @@ async def complete_mission(completion: MissionCompletion, current_user: User = D
     if completion.mission_id in user.get("completed_missions", []):
         raise HTTPException(status_code=400, detail="Mission already completed")
     
-    # Update user
-    new_points = user.get("points", 0) + mission["points_reward"]
-    new_completed_missions = user.get("completed_missions", []) + [completion.mission_id]
+    # Check cooldown for mini-quiz missions
+    if mission["type"] == "mini_quiz":
+        if not await check_mission_cooldown(current_user.id, completion.mission_id):
+            failed_missions = user.get("failed_missions", {})
+            failed_date = failed_missions[completion.mission_id]
+            if isinstance(failed_date, str):
+                failed_date = datetime.fromisoformat(failed_date)
+            
+            retry_date = failed_date + timedelta(days=7)
+            remaining_days = (retry_date - datetime.utcnow()).days
+            
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Mission failed recently. You can retry in {remaining_days} days."
+            )
     
-    # Update rank based on points
-    rank = UserRank.EMPRENDEDOR_NOVATO
-    if new_points >= 1000:
-        rank = UserRank.EMPRENDEDOR_MASTER
-    elif new_points >= 500:
-        rank = UserRank.EMPRENDEDOR_EXPERTO
-    elif new_points >= 250:
-        rank = UserRank.EMPRENDEDOR_SENIOR
-    elif new_points >= 100:
-        rank = UserRank.EMPRENDEDOR_JUNIOR
+    # Validate mission completion for mini-quiz
+    success = True
+    score = 100.0
     
-    await db.users.update_one(
-        {"id": current_user.id},
-        {
-            "$set": {
-                "points": new_points,
-                "rank": rank,
-                "completed_missions": new_completed_missions,
-                "updated_at": datetime.utcnow()
-            }
-        }
+    if mission["type"] == "mini_quiz":
+        completion_data = completion.completion_data
+        user_answers = completion_data.get("quiz_answers", {})
+        questions = mission.get("content", {}).get("questions", [])
+        
+        if not questions:
+            raise HTTPException(status_code=400, detail="Quiz has no questions")
+        
+        correct_answers = 0
+        total_questions = len(questions)
+        
+        for i, question in enumerate(questions):
+            user_answer = user_answers.get(str(i))
+            correct_answer = question.get("correct_answer")
+            
+            if user_answer is not None and user_answer == correct_answer:
+                correct_answers += 1
+        
+        score = (correct_answers / total_questions) * 100
+        success = score >= 70  # 70% minimum to pass
+    
+    # Record mission attempt
+    attempt = MissionAttempt(
+        user_id=current_user.id,
+        mission_id=completion.mission_id,
+        status=MissionAttemptStatus.SUCCESS if success else MissionAttemptStatus.FAILED,
+        score=score,
+        answers=completion.completion_data.get("quiz_answers", {}),
+        can_retry_after=datetime.utcnow() + timedelta(days=7) if not success and mission["type"] == "mini_quiz" else None
     )
     
-    return {"message": "Mission completed successfully", "points_earned": mission["points_reward"]}
+    await db.mission_attempts.insert_one(attempt.dict())
+    
+    # Update user stats
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$inc": {"total_missions_attempted": 1}}
+    )
+    
+    if success:
+        # Mission completed successfully
+        new_points = user.get("points", 0) + mission["points_reward"]
+        new_completed_missions = user.get("completed_missions", []) + [completion.mission_id]
+        
+        # Update rank based on points
+        rank = UserRank.EMPRENDEDOR_NOVATO
+        if new_points >= 1000:
+            rank = UserRank.EMPRENDEDOR_MASTER
+        elif new_points >= 500:
+            rank = UserRank.EMPRENDEDOR_EXPERTO
+        elif new_points >= 250:
+            rank = UserRank.EMPRENDEDOR_SENIOR
+        elif new_points >= 100:
+            rank = UserRank.EMPRENDEDOR_JUNIOR
+        
+        # Check for rank up
+        old_rank = user.get("rank", UserRank.EMPRENDEDOR_NOVATO)
+        rank_up = rank != old_rank
+        
+        await db.users.update_one(
+            {"id": current_user.id},
+            {
+                "$set": {
+                    "points": new_points,
+                    "rank": rank,
+                    "completed_missions": new_completed_missions,
+                    "updated_at": datetime.utcnow()
+                },
+                "$inc": {"total_missions_completed": 1}
+            }
+        )
+        
+        # Update user streak
+        await update_user_streak(current_user.id)
+        
+        # Create notifications
+        if rank_up:
+            await create_notification(
+                current_user.id,
+                NotificationType.RANK_UP,
+                "¡Nuevo Rango!",
+                f"¡Felicitaciones! Has alcanzado el rango {rank.replace('_', ' ').title()}",
+                {"new_rank": rank, "old_rank": old_rank}
+            )
+        
+        # Check for new achievements
+        achievements = await db.achievements.find().to_list(100)
+        updated_user = await db.users.find_one({"id": current_user.id})
+        
+        for achievement in achievements:
+            if await check_achievement_eligibility(User(**updated_user), Achievement(**achievement)):
+                await create_notification(
+                    current_user.id,
+                    NotificationType.NEW_ACHIEVEMENT,
+                    "¡Nuevo Logro Desbloqueado!",
+                    f"Has desbloqueado: {achievement['title']}",
+                    {"achievement_id": achievement["id"]}
+                )
+        
+        return {
+            "message": "Mission completed successfully", 
+            "points_earned": mission["points_reward"],
+            "total_points": new_points,
+            "new_rank": rank,
+            "rank_up": rank_up,
+            "score": score
+        }
+    else:
+        # Mission failed
+        failed_missions = user.get("failed_missions", {})
+        failed_missions[completion.mission_id] = datetime.utcnow()
+        
+        await db.users.update_one(
+            {"id": current_user.id},
+            {
+                "$set": {
+                    "failed_missions": failed_missions,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        return {
+            "message": "Mission failed. You can retry in 7 days.",
+            "points_earned": 0,
+            "score": score,
+            "retry_after": datetime.utcnow() + timedelta(days=7)
+        }
 
 # Achievement routes
 @api_router.post("/achievements", response_model=Achievement)
