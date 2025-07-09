@@ -1565,6 +1565,173 @@ const MissionModal = ({ mission, onClose, onSave }) => {
   );
 };
 
+// Achievement Modal Component for Admin
+const AchievementModal = ({ achievement, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    title: achievement?.title || '',
+    description: achievement?.description || '',
+    icon: achievement?.icon || '🏆',
+    condition: achievement?.condition || 'complete_missions',
+    points_required: achievement?.points_required || 0,
+    missions_required: achievement?.missions_required || 0
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      if (achievement) {
+        await axios.put(`${API}/achievements/${achievement.id}`, formData);
+      } else {
+        await axios.post(`${API}/achievements`, formData);
+      }
+      await onSave();
+      onClose();
+    } catch (error) {
+      console.error('Error saving achievement:', error);
+      alert('Error al guardar el logro. Por favor, inténtalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {achievement ? 'Editar Logro' : 'Crear Nuevo Logro'}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Título
+              </label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => handleChange('title', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Icono
+              </label>
+              <input
+                type="text"
+                value={formData.icon}
+                onChange={(e) => handleChange('icon', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                placeholder="🏆"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              rows="3"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Condición
+            </label>
+            <select
+              value={formData.condition}
+              onChange={(e) => handleChange('condition', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            >
+              <option value="complete_missions">Completar misiones</option>
+              <option value="reach_points">Alcanzar puntos</option>
+              <option value="complete_1_mission">Completar 1 misión</option>
+              <option value="complete_5_missions">Completar 5 misiones</option>
+              <option value="complete_10_missions">Completar 10 misiones</option>
+              <option value="reach_100_points">Alcanzar 100 puntos</option>
+              <option value="reach_500_points">Alcanzar 500 puntos</option>
+              <option value="reach_1000_points">Alcanzar 1000 puntos</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Puntos Requeridos
+              </label>
+              <input
+                type="number"
+                value={formData.points_required}
+                onChange={(e) => handleChange('points_required', parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                min="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Misiones Requeridas
+              </label>
+              <input
+                type="number"
+                value={formData.missions_required}
+                onChange={(e) => handleChange('missions_required', parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                min="0"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-md hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50"
+            >
+              {loading ? <LoadingSpinner /> : (achievement ? 'Actualizar' : 'Crear')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // Mission Completion Modal (same as before but updated)
 const MissionCompletionModal = ({ mission, onClose, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
