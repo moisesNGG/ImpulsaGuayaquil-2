@@ -2922,6 +2922,181 @@ const MissionCompletionModal = ({ mission, onClose, onComplete }) => {
   );
 };
 
+// Badges Section Component
+const BadgesSection = ({ user }) => {
+  const [badges, setBadges] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [allBadges, setAllBadges] = useState([]);
+
+  useEffect(() => {
+    const fetchBadges = async () => {
+      try {
+        // Fetch user's badges
+        const userBadgesResponse = await axios.get(`${API}/badges/user/${user.id}`);
+        setBadges(userBadgesResponse.data);
+        
+        // Fetch all badges to show progress
+        const allBadgesResponse = await axios.get(`${API}/badges`);
+        setAllBadges(allBadgesResponse.data);
+      } catch (error) {
+        console.error('Error fetching badges:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBadges();
+  }, [user.id]);
+
+  const getRarityColor = (rarity) => {
+    switch (rarity) {
+      case 'common': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'uncommon': return 'bg-green-100 text-green-800 border-green-200';
+      case 'rare': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'epic': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'legendary': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getCategoryColor = (category) => {
+    switch (category) {
+      case 'achievement': return 'bg-orange-50 border-orange-200';
+      case 'streak': return 'bg-red-50 border-red-200';
+      case 'skill': return 'bg-cyan-50 border-cyan-200';
+      case 'milestone': return 'bg-indigo-50 border-indigo-200';
+      case 'social': return 'bg-pink-50 border-pink-200';
+      case 'special': return 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200';
+      default: return 'bg-gray-50 border-gray-200';
+    }
+  };
+
+  const earnedBadgeIds = badges.map(b => b.badge.id);
+  const categorizedBadges = allBadges.reduce((acc, badge) => {
+    if (!acc[badge.category]) {
+      acc[badge.category] = [];
+    }
+    acc[badge.category].push(badge);
+    return acc;
+  }, {});
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold text-gray-800">Tus Insignias</h3>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-bold text-gray-800">Tus Insignias</h3>
+        <div className="bg-cyan-100 text-cyan-800 px-3 py-1 rounded-full text-sm font-medium">
+          {badges.length} / {allBadges.length}
+        </div>
+      </div>
+
+      {/* Earned Badges */}
+      {badges.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="text-lg font-semibold text-gray-700">🏆 Insignias Obtenidas</h4>
+          <div className="grid gap-4">
+            {badges.map((userBadge) => (
+              <div 
+                key={userBadge.badge.id} 
+                className={`bg-white border-2 rounded-xl p-4 shadow-sm ${getCategoryColor(userBadge.badge.category)}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-3xl">{userBadge.badge.icon}</div>
+                    <div>
+                      <h5 className="font-bold text-gray-800">{userBadge.badge.title}</h5>
+                      <p className="text-gray-600 text-sm">{userBadge.badge.description}</p>
+                      <div className="flex items-center space-x-2 mt-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRarityColor(userBadge.badge.rarity)}`}>
+                          {userBadge.badge.rarity.toUpperCase()}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          +{userBadge.badge.points_reward} pts
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(userBadge.earned_at).toLocaleDateString('es-EC')}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Available Badges by Category */}
+      {Object.entries(categorizedBadges).map(([category, categoryBadges]) => (
+        <div key={category} className="space-y-4">
+          <h4 className="text-lg font-semibold text-gray-700 capitalize">
+            {category === 'achievement' && '🏆 Logros'}
+            {category === 'streak' && '🔥 Rachas'}
+            {category === 'skill' && '📈 Habilidades'}
+            {category === 'milestone' && '🎯 Hitos'}
+            {category === 'social' && '🤝 Sociales'}
+            {category === 'special' && '✨ Especiales'}
+          </h4>
+          <div className="grid gap-3">
+            {categoryBadges.map((badge) => {
+              const isEarned = earnedBadgeIds.includes(badge.id);
+              return (
+                <div 
+                  key={badge.id} 
+                  className={`border-2 rounded-xl p-4 transition-all ${
+                    isEarned 
+                      ? `bg-white shadow-sm ${getCategoryColor(badge.category)}` 
+                      : 'bg-gray-50 border-gray-200 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className={`text-3xl ${isEarned ? '' : 'grayscale'}`}>
+                        {isEarned ? badge.icon : '🔒'}
+                      </div>
+                      <div>
+                        <h5 className={`font-bold ${isEarned ? 'text-gray-800' : 'text-gray-500'}`}>
+                          {badge.title}
+                        </h5>
+                        <p className={`text-sm ${isEarned ? 'text-gray-600' : 'text-gray-400'}`}>
+                          {badge.description}
+                        </p>
+                        <div className="flex items-center space-x-2 mt-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRarityColor(badge.rarity)}`}>
+                            {badge.rarity.toUpperCase()}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            +{badge.points_reward} pts
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {isEarned && (
+                      <div className="text-green-600 text-2xl">
+                        ✅
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // Profile Section Component
 const ProfileSection = ({ user }) => {
   const [showProfilePictureModal, setShowProfilePictureModal] = useState(false);
