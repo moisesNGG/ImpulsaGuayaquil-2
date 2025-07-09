@@ -410,6 +410,7 @@ async def check_badge_eligibility(user: User, badge: "Badge") -> bool:
     """Check if user is eligible for a badge"""
     condition = badge.condition
     
+    # Achievement badges
     if condition == "complete_first_mission":
         return len(user.completed_missions) >= 1
     elif condition == "complete_5_missions":
@@ -418,16 +419,18 @@ async def check_badge_eligibility(user: User, badge: "Badge") -> bool:
         return len(user.completed_missions) >= 10
     elif condition == "complete_25_missions":
         return len(user.completed_missions) >= 25
+    
+    # Streak badges
     elif condition == "streak_3_days":
         return user.current_streak >= 3
     elif condition == "streak_7_days":
         return user.current_streak >= 7
-    elif condition == "streak_15_days":
-        return user.current_streak >= 15
+    elif condition == "streak_14_days":
+        return user.current_streak >= 14
     elif condition == "streak_30_days":
         return user.current_streak >= 30
-    elif condition == "streak_100_days":
-        return user.current_streak >= 100
+    
+    # Skill badges (points)
     elif condition == "earn_100_points":
         return user.points >= 100
     elif condition == "earn_500_points":
@@ -436,14 +439,39 @@ async def check_badge_eligibility(user: User, badge: "Badge") -> bool:
         return user.points >= 1000
     elif condition == "earn_2500_points":
         return user.points >= 2500
-    elif condition == "reach_level_principiante":
-        return user.level in [UserLevel.PRINCIPIANTE, UserLevel.INTERMEDIO, UserLevel.AVANZADO, UserLevel.EXPERTO, UserLevel.MAESTRO, UserLevel.LEYENDA]
+    
+    # Milestone badges (levels)
+    elif condition == "reach_level_junior":
+        return user.rank in ["emprendedor_junior", "emprendedor_senior", "emprendedor_experto", "emprendedor_master"]
+    elif condition == "reach_level_senior":
+        return user.rank in ["emprendedor_senior", "emprendedor_experto", "emprendedor_master"]
     elif condition == "reach_level_experto":
-        return user.level in [UserLevel.EXPERTO, UserLevel.MAESTRO, UserLevel.LEYENDA]
-    elif condition == "reach_level_maestro":
-        return user.level in [UserLevel.MAESTRO, UserLevel.LEYENDA]
-    elif condition == "reach_level_leyenda":
-        return user.level == UserLevel.LEYENDA
+        return user.rank in ["emprendedor_experto", "emprendedor_master"]
+    elif condition == "reach_level_master":
+        return user.rank == "emprendedor_master"
+    
+    # Social badges (special conditions)
+    elif condition == "participate_in_events":
+        # Check if user has registered for events
+        event_registrations = await db.event_registrations.count_documents({"user_id": user.id})
+        return event_registrations > 0
+    elif condition == "network_builder":
+        # Check if user has connected with other users (placeholder)
+        return user.points >= 750  # Temporary condition
+    
+    # Special badges (creative conditions)
+    elif condition == "creative_innovator":
+        # Check if user completed creative missions
+        return len(user.completed_missions) >= 15 and user.points >= 300
+    elif condition == "speed_champion":
+        # Check if user completed missions quickly (placeholder)
+        return len(user.completed_missions) >= 8 and user.current_streak >= 5
+    elif condition == "digital_transformer":
+        # Check if user engaged with digital tools
+        return user.points >= 600 and len(user.completed_missions) >= 12
+    elif condition == "social_impact":
+        # Check if user achieved significant impact
+        return user.points >= 1500 and len(user.completed_missions) >= 20
     
     return False
 
