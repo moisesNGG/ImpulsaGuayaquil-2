@@ -1391,6 +1391,15 @@ const AdminPanel = () => {
           onSave={loadAdminData}
         />
       )}
+      
+      {/* Achievement Modal */}
+      {showAchievementModal && (
+        <AchievementModal
+          achievement={editingAchievement}
+          onClose={() => setShowAchievementModal(false)}
+          onSave={loadAdminData}
+        />
+      )}
     </div>
   );
 };
