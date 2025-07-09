@@ -1352,6 +1352,59 @@ const AdminPanel = () => {
     }
   };
 
+  const handleCreateReward = () => {
+    setEditingReward(null);
+    setShowRewardModal(true);
+  };
+
+  const handleEditReward = (reward) => {
+    setEditingReward(reward);
+    setShowRewardModal(true);
+  };
+
+  const handleDeleteReward = async (rewardId) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar esta recompensa?')) {
+      try {
+        await axios.delete(`${API}/rewards/${rewardId}`);
+        await loadAdminData();
+      } catch (error) {
+        console.error('Error deleting reward:', error);
+      }
+    }
+  };
+
+  const handleCreateEvent = () => {
+    setEditingEvent(null);
+    setShowEventModal(true);
+  };
+
+  const handleEditEvent = (event) => {
+    setEditingEvent(event);
+    setShowEventModal(true);
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este evento?')) {
+      try {
+        await axios.delete(`${API}/events/${eventId}`);
+        await loadAdminData();
+      } catch (error) {
+        console.error('Error deleting event:', error);
+      }
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
+      try {
+        await axios.delete(`${API}/users/${userId}`);
+        await loadAdminData();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+      }
+    }
+  };
+
   const renderDashboard = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
