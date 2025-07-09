@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
 # Get the backend URL from the frontend/.env file
-BACKEND_URL = "https://e0bef9c7-cb81-464e-8591-e56f3578a8a8.preview.emergentagent.com/api"
+BACKEND_URL = "https://7e71a514-bc68-4012-b87a-90faac3ed29d.preview.emergentagent.com/api"
 
 # Test results tracking
 test_results = {
