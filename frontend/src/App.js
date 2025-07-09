@@ -1417,6 +1417,100 @@ const MissionModal = ({ mission, onClose, onSave }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // Plantillas predefinidas para cada tipo de misión
+  const missionTemplates = {
+    'mini_quiz': {
+      title: 'Quiz: Fundamentos de [Tema]',
+      description: 'Responde preguntas básicas sobre [tema específico]',
+      points_reward: 30,
+      content: {
+        questions: [
+          {
+            question: "¿Cuál es el concepto principal de [tema]?",
+            options: ["Opción A", "Opción B", "Opción C", "Opción D"],
+            correct_answer: 0
+          },
+          {
+            question: "¿Qué beneficios tiene [tema]?",
+            options: ["Beneficio 1", "Beneficio 2", "Beneficio 3", "Beneficio 4"],
+            correct_answer: 1
+          }
+        ]
+      }
+    },
+    'microvideo': {
+      title: 'Video: Tu experiencia con [Tema]',
+      description: 'Graba un video corto sobre tu experiencia con [tema específico]',
+      points_reward: 50,
+      content: {
+        instructions: "Graba un video de máximo 60 segundos explicando tu experiencia",
+        max_duration: 60,
+        topics: [
+          "Tu experiencia personal",
+          "Lecciones aprendidas",
+          "Consejos para otros emprendedores",
+          "Resultados obtenidos"
+        ]
+      }
+    },
+    'downloadable_guide': {
+      title: 'Guía: [Tema] para Emprendedores',
+      description: 'Descarga y revisa la guía completa sobre [tema específico]',
+      points_reward: 40,
+      content: {
+        guide_url: "https://example.com/guia-[tema].pdf",
+        topics: [
+          "Conceptos básicos",
+          "Pasos a seguir",
+          "Herramientas necesarias",
+          "Casos de éxito"
+        ],
+        completion_requirement: "Confirmar lectura completa y responder pregunta de verificación"
+      }
+    },
+    'practical_task': {
+      title: 'Tarea: Desarrolla tu [Tema]',
+      description: 'Crea y desarrolla tu propio [tema específico] siguiendo la plantilla',
+      points_reward: 80,
+      content: {
+        template_sections: [
+          "Objetivo principal",
+          "Análisis de la situación",
+          "Plan de acción",
+          "Cronograma",
+          "Recursos necesarios",
+          "Métricas de éxito"
+        ],
+        deadline_hours: 48,
+        requirements: [
+          "Completar todas las secciones",
+          "Subir archivo en formato PDF",
+          "Incluir evidencias o ejemplos"
+        ]
+      }
+    },
+    'expert_advice': {
+      title: 'Consejo Experto: [Tema] por [Nombre Experto]',
+      description: 'Aprende de la experiencia de expertos en [tema específico]',
+      points_reward: 35,
+      content: {
+        expert_name: "Nombre del Experto",
+        expert_title: "Título/Posición del Experto",
+        video_url: "https://example.com/video-[tema].mp4",
+        key_points: [
+          "Punto clave 1",
+          "Punto clave 2",
+          "Punto clave 3",
+          "Punto clave 4"
+        ],
+        resources: [
+          "Recurso adicional 1",
+          "Recurso adicional 2"
+        ]
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -1437,17 +1531,193 @@ const MissionModal = ({ mission, onClose, onSave }) => {
     }
   };
 
+  const handleTypeChange = (newType) => {
+    const template = missionTemplates[newType];
+    if (template && !mission) { // Solo aplicar plantilla si es una misión nueva
+      setFormData(prev => ({
+        ...prev,
+        type: newType,
+        title: template.title,
+        description: template.description,
+        points_reward: template.points_reward,
+        content: template.content
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        type: newType
+      }));
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleContentChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [field]: value
+      }
+    }));
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">
-            {mission ? 'Editar Misión' : 'Nueva Misión'}
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-800">
+              {mission ? 'Editar Misión' : 'Nueva Misión'}
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {!mission && (
+            <p className="text-sm text-gray-600 mt-2">
+              💡 Selecciona un tipo de misión y se aplicará automáticamente una plantilla que puedes personalizar
+            </p>
+          )}
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Título
+              </label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => handleChange('title', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tipo de Misión
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              >
+                <option value="mini_quiz">📝 Mini Quiz</option>
+                <option value="microvideo">🎥 Microvideo</option>
+                <option value="downloadable_guide">📚 Guía Descargable</option>
+                <option value="practical_task">💼 Tarea Práctica</option>
+                <option value="expert_advice">🎓 Consejo Experto</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Descripción
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              rows="3"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Puntos de Recompensa
+              </label>
+              <input
+                type="number"
+                value={formData.points_reward}
+                onChange={(e) => handleChange('points_reward', parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                min="1"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Posición en el Camino
+              </label>
+              <input
+                type="number"
+                value={formData.position}
+                onChange={(e) => handleChange('position', parseInt(e.target.value) || 1)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                min="1"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Contenido específico según el tipo */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Contenido Específico - {formData.type.replace('_', ' ').toUpperCase()}
+            </h3>
+            
+            <div className="bg-gray-50 rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Configuración de Contenido (JSON)
+              </label>
+              <textarea
+                value={JSON.stringify(formData.content, null, 2)}
+                onChange={(e) => {
+                  try {
+                    const parsed = JSON.parse(e.target.value);
+                    handleChange('content', parsed);
+                  } catch (error) {
+                    // Ignore invalid JSON while typing
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono text-sm"
+                rows="10"
+                placeholder="Configuración en formato JSON..."
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 Edita el contenido JSON según el tipo de misión. La plantilla se aplicó automáticamente.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? <LoadingSpinner /> : (mission ? 'Actualizar' : 'Crear')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Título
