@@ -902,6 +902,22 @@ async def get_achievements():
     achievements = await db.achievements.find().to_list(100)
     return [Achievement(**achievement) for achievement in achievements]
 
+@api_router.get("/achievements/eligible", response_model=List[Achievement])
+async def get_eligible_achievements(current_user: User = Depends(get_current_user)):
+    """Get achievements that user is eligible for"""
+    user = await db.users.find_one({"id": current_user.id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    achievements = await db.achievements.find().to_list(100)
+    eligible_achievements = []
+    
+    for achievement in achievements:
+        if await check_achievement_eligibility(User(**user), Achievement(**achievement)):
+            eligible_achievements.append(Achievement(**achievement))
+    
+    return eligible_achievements
+
 @api_router.put("/achievements/{achievement_id}", response_model=Achievement)
 async def update_achievement(achievement_id: str, achievement_data: dict, current_user: User = Depends(get_admin_user)):
     achievement = await db.achievements.find_one({"id": achievement_id})
