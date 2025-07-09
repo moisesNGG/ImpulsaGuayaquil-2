@@ -230,8 +230,12 @@ const AppLoadingAnimation = ({ onComplete }) => {
 const PointsAnimation = ({ points, onComplete }) => {
   const [currentPoints, setCurrentPoints] = useState(0);
   const [showAnimation, setShowAnimation] = useState(true);
+  const [showStars, setShowStars] = useState(false);
 
   useEffect(() => {
+    // Show stars effect after initial animation
+    setTimeout(() => setShowStars(true), 500);
+    
     const animationDuration = 2000;
     const incrementInterval = 50;
     const increment = points / (animationDuration / incrementInterval);
@@ -244,7 +248,7 @@ const PointsAnimation = ({ points, onComplete }) => {
           setTimeout(() => {
             setShowAnimation(false);
             onComplete();
-          }, 1000);
+          }, 1500);
           return points;
         }
         return newPoints;
@@ -258,26 +262,67 @@ const PointsAnimation = ({ points, onComplete }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="text-center">
-        <div className="bg-white rounded-2xl p-8 shadow-2xl">
-          <div className="text-6xl mb-4 animate-bounce">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Misión Completada!</h2>
-          <p className="text-gray-600 mb-6">Has ganado puntos</p>
-          
-          <div className="text-6xl font-bold text-cyan-600 mb-4">
-            +{Math.round(currentPoints)}
+      <div className="text-center relative">
+        {/* Stars Animation */}
+        {showStars && (
+          <div className="absolute inset-0 pointer-events-none">
+            {[...Array(12)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute animate-ping"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: '1s'
+                }}
+              >
+                <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+              </div>
+            ))}
           </div>
+        )}
+        
+        <div className="bg-white rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+          {/* Background gradient animation */}
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-50 to-blue-50 opacity-50"></div>
           
-          <div className="flex items-center justify-center space-x-2">
-            <StarIcon />
-            <span className="text-lg font-medium text-gray-700">puntos</span>
-          </div>
-          
-          <div className="mt-6 flex justify-center">
-            <div className="animate-pulse">
-              <div className="w-4 h-4 bg-cyan-400 rounded-full mx-1 inline-block"></div>
-              <div className="w-4 h-4 bg-cyan-400 rounded-full mx-1 inline-block animation-delay-200"></div>
-              <div className="w-4 h-4 bg-cyan-400 rounded-full mx-1 inline-block animation-delay-400"></div>
+          <div className="relative z-10">
+            <div className="text-6xl mb-4 animate-bounce">🎉</div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-2">¡Misión Completada!</h2>
+            <p className="text-gray-600 mb-6">Has ganado puntos increíbles</p>
+            
+            <div className="text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-blue-600 mb-4 animate-pulse">
+              +{Math.round(currentPoints)}
+            </div>
+            
+            <div className="flex items-center justify-center space-x-2 mb-6">
+              <div className="text-yellow-500 animate-pulse">
+                <StarIcon />
+              </div>
+              <span className="text-xl font-medium text-gray-700">puntos</span>
+              <div className="text-yellow-500 animate-pulse">
+                <StarIcon />
+              </div>
+            </div>
+            
+            {/* Animated progress bar */}
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-6 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-cyan-500 to-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${(currentPoints / points) * 100}%` }}
+              />
+            </div>
+            
+            {/* Floating animation dots */}
+            <div className="flex justify-center space-x-2">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 animate-bounce"
+                  style={{ animationDelay: `${i * 0.2}s` }}
+                />
+              ))}
             </div>
           </div>
         </div>
