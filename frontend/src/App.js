@@ -1573,6 +1573,7 @@ const AdminPanel = () => {
                 <th className="text-left py-4 px-6 font-medium text-gray-700">Rango</th>
                 <th className="text-left py-4 px-6 font-medium text-gray-700">Misiones</th>
                 <th className="text-left py-4 px-6 font-medium text-gray-700">Registro</th>
+                <th className="text-left py-4 px-6 font-medium text-gray-700">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -1592,9 +1593,21 @@ const AdminPanel = () => {
                       {user.rank.replace('_', ' ').toUpperCase()}
                     </span>
                   </td>
-                  <td className="py-4 px-6">{user.completed_missions.length}</td>
+                  <td className="py-4 px-6">{user.completed_missions?.length || 0}</td>
                   <td className="py-4 px-6">
                     {new Date(user.created_at).toLocaleDateString('es-EC')}
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex space-x-2">
+                      {user.role !== 'admin' && (
+                        <button
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
