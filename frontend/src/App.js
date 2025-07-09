@@ -1300,6 +1300,7 @@ const AdminPanel = () => {
         {activeTab === 'dashboard' && renderDashboard()}
         {activeTab === 'missions' && renderMissions()}
         {activeTab === 'users' && renderUsers()}
+        {activeTab === 'achievements' && renderAchievements()}
       </div>
 
       {/* Mission Modal will be implemented here */}
