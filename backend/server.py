@@ -326,7 +326,26 @@ class Event(BaseModel):
     organizer: str
     capacity: Optional[int] = None
     registered_users: List[str] = []
+    registration_url: Optional[str] = None  # Nueva funcionalidad
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class EventCreate(BaseModel):
+    title: str
+    description: str
+    location: str
+    date: datetime
+    organizer: str
+    capacity: Optional[int] = None
+    registration_url: Optional[str] = None
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    date: Optional[datetime] = None
+    organizer: Optional[str] = None
+    capacity: Optional[int] = None
+    registration_url: Optional[str] = None
 
 class AdminStats(BaseModel):
     total_users: int
