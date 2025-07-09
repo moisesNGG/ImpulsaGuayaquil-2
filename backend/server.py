@@ -336,6 +336,31 @@ async def get_user(user_id: str, current_user: User = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="User not found")
     return UserResponse(**user)
 
+@api_router.put("/users/{user_id}/profile-picture")
+async def update_profile_picture(user_id: str, profile_data: dict, current_user: User = Depends(get_current_user)):
+    # Users can only update their own profile picture, unless they're admin
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    profile_picture = profile_data.get("profile_picture")
+    if not profile_picture:
+        raise HTTPException(status_code=400, detail="Profile picture is required")
+    
+    # Update user profile picture
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "profile_picture": profile_picture,
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Return updated user
+    updated_user = await db.users.find_one({"id": user_id})
+    return UserResponse(**updated_user)
+
 # Mission routes
 @api_router.post("/missions", response_model=Mission)
 async def create_mission(mission_data: MissionCreate, current_user: User = Depends(get_admin_user)):
