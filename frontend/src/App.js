@@ -1385,6 +1385,7 @@ const UserApp = () => {
 
   const handleStartMission = (mission) => {
     setSelectedMission(mission);
+    setCurrentTab('mission-detail');
   };
 
   const handleCompleteMission = async (missionId, completionData) => {
