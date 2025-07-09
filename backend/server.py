@@ -180,6 +180,12 @@ class UserResponse(BaseModel):
     rank: UserRank
     completed_missions: List[str]
     profile_picture: Optional[str] = None
+    current_streak: int = 0
+    best_streak: int = 0
+    last_mission_date: Optional[datetime] = None
+    favorite_rewards: List[str] = []
+    total_missions_attempted: int = 0
+    total_missions_completed: int = 0
     created_at: datetime
     updated_at: datetime
 
