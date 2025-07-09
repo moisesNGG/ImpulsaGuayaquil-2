@@ -959,10 +959,14 @@ const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [missions, setMissions] = useState([]);
   const [users, setUsers] = useState([]);
+  const [achievements, setAchievements] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [showMissionModal, setShowMissionModal] = useState(false);
+  const [showAchievementModal, setShowAchievementModal] = useState(false);
   const [editingMission, setEditingMission] = useState(null);
+  const [editingAchievement, setEditingAchievement] = useState(null);
+  const { logout } = useAuth();
 
   useEffect(() => {
     loadAdminData();
