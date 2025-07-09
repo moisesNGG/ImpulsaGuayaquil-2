@@ -310,7 +310,18 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 @api_router.get("/users", response_model=List[UserResponse])
 async def get_users(current_user: User = Depends(get_admin_user)):
     users = await db.users.find().to_list(100)
-    return [UserResponse(**{k: v for k, v in user.items() if k != '_id'}) for user in users]
+    result = []
+    for user in users:
+        # Skip the _id field
+        if '_id' in user:
+            del user['_id']
+        
+        # Skip users that don't have the required fields
+        if not all(field in user for field in ['nombre', 'apellido', 'cedula', 'email', 'nombre_emprendimiento', 'role']):
+            continue
+            
+        result.append(UserResponse(**user))
+    return result
 
 @api_router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: User = Depends(get_current_user)):
