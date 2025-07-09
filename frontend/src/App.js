@@ -2039,6 +2039,173 @@ const MissionCompletionModal = ({ mission, onClose, onComplete }) => {
   );
 };
 
+// Profile Section Component
+const ProfileSection = ({ user }) => {
+  const [showProfilePictureModal, setShowProfilePictureModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleProfilePictureUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona una imagen válida');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('La imagen debe ser menor a 5MB');
+      return;
+    }
+
+    setUploading(true);
+    
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Image = e.target.result;
+        
+        // Upload to server
+        await axios.put(`${API}/users/${user.id}/profile-picture`, {
+          profile_picture: base64Image
+        });
+        
+        // Refresh page to update user data
+        window.location.reload();
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Error al subir la imagen. Inténtalo de nuevo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const ProfilePictureModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">Cambiar Foto de Perfil</h3>
+          <button
+            onClick={() => setShowProfilePictureModal(false)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="text-center">
+            <div className="w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden bg-gradient-to-br from-cyan-500 to-blue-600">
+              {user?.profile_picture ? (
+                <img 
+                  src={user.profile_picture} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
+                  {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar nueva imagen
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleProfilePictureUpload}
+              disabled={uploading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent disabled:opacity-50"
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              Máximo 5MB. Formatos: JPG, PNG, GIF
+            </p>
+          </div>
+          
+          {uploading && (
+            <div className="flex items-center justify-center">
+              <LoadingSpinner />
+              <span className="ml-2 text-sm text-gray-600">Subiendo imagen...</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-2xl font-bold text-gray-800">Mi Perfil</h3>
+      
+      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center space-x-6 mb-6">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-cyan-500 to-blue-600">
+              {user?.profile_picture ? (
+                <img 
+                  src={user.profile_picture} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
+                  {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setShowProfilePictureModal(true)}
+              className="absolute -bottom-2 -right-2 w-8 h-8 bg-cyan-600 text-white rounded-full flex items-center justify-center hover:bg-cyan-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+          <div>
+            <h4 className="text-xl font-bold text-gray-800">{user?.nombre} {user?.apellido}</h4>
+            <p className="text-gray-600">{user?.email}</p>
+            <p className="text-gray-600">C.I: {user?.cedula}</p>
+            <p className="text-cyan-600 font-medium">{user?.rank?.replace('_', ' ').toUpperCase()}</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="text-2xl font-bold text-gray-800">{user?.points || 0}</div>
+            <div className="text-sm text-gray-600">Puntos Totales</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="text-2xl font-bold text-gray-800">{user?.completed_missions?.length || 0}</div>
+            <div className="text-sm text-gray-600">Misiones Completadas</div>
+          </div>
+        </div>
+        
+        <div className="border-t pt-4">
+          <h5 className="font-bold text-gray-800 mb-2">Información del Emprendimiento</h5>
+          <p className="text-gray-600 mb-4">{user?.nombre_emprendimiento}</p>
+          
+          <h5 className="font-bold text-gray-800 mb-2">Fecha de Registro</h5>
+          <p className="text-gray-600">{user?.created_at ? new Date(user.created_at).toLocaleDateString('es-EC') : 'N/A'}</p>
+        </div>
+      </div>
+      
+      {showProfilePictureModal && <ProfilePictureModal />}
+    </div>
+  );
+};
+
 // Main App Component
 function App() {
   const [showRegister, setShowRegister] = useState(false);
