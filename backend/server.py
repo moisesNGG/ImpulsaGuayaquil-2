@@ -1380,6 +1380,10 @@ async def initialize_sample_data():
         }
     ]
     
+    for achievement_data in sample_achievements:
+        achievement = Achievement(**achievement_data)
+        await db.achievements.insert_one(achievement.dict())
+    
     return {"message": "Sample data initialized successfully"}
 
 # Include the router in the main app
