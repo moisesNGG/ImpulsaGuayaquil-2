@@ -1013,6 +1013,27 @@ const AdminPanel = () => {
     }
   };
 
+  const handleCreateAchievement = () => {
+    setEditingAchievement(null);
+    setShowAchievementModal(true);
+  };
+
+  const handleEditAchievement = (achievement) => {
+    setEditingAchievement(achievement);
+    setShowAchievementModal(true);
+  };
+
+  const handleDeleteAchievement = async (achievementId) => {
+    if (window.confirm('¿Estás seguro de que quieres eliminar este logro?')) {
+      try {
+        await axios.delete(`${API}/achievements/${achievementId}`);
+        await loadAdminData();
+      } catch (error) {
+        console.error('Error deleting achievement:', error);
+      }
+    }
+  };
+
   const renderDashboard = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
