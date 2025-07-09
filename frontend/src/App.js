@@ -2571,13 +2571,13 @@ const UserApp = () => {
 
   const loadData = async () => {
     try {
-      const [achievementsRes, rewardsRes, eventsRes] = await Promise.all([
-        axios.get(`${API}/achievements`),
+      const [eligibleAchievementsRes, rewardsRes, eventsRes] = await Promise.all([
+        axios.get(`${API}/achievements/eligible`),
         axios.get(`${API}/rewards`),
         axios.get(`${API}/events`)
       ]);
       
-      setAchievements(achievementsRes.data);
+      setAchievements(eligibleAchievementsRes.data);
       setRewards(rewardsRes.data);
       setEvents(eventsRes.data);
       
