@@ -1234,6 +1234,86 @@ const AdminPanel = () => {
     </div>
   );
 
+  const renderAchievements = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Gestión de Logros</h3>
+        <button
+          onClick={handleCreateAchievement}
+          className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:from-cyan-600 hover:to-blue-700 flex items-center space-x-2"
+        >
+          <PlusIcon />
+          <span>Nuevo Logro</span>
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-4 px-6 font-medium text-gray-700">Logro</th>
+                <th className="text-left py-4 px-6 font-medium text-gray-700">Condición</th>
+                <th className="text-left py-4 px-6 font-medium text-gray-700">Requisitos</th>
+                <th className="text-left py-4 px-6 font-medium text-gray-700">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {achievements.map(achievement => (
+                <tr key={achievement.id} className="border-b border-gray-100">
+                  <td className="py-4 px-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="text-2xl">{achievement.icon}</div>
+                      <div>
+                        <div className="font-medium text-gray-900">{achievement.title}</div>
+                        <div className="text-sm text-gray-500">{achievement.description}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                      {achievement.condition.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="space-y-1">
+                      {achievement.points_required > 0 && (
+                        <div className="text-sm text-gray-600">
+                          📊 {achievement.points_required} puntos
+                        </div>
+                      )}
+                      {achievement.missions_required > 0 && (
+                        <div className="text-sm text-gray-600">
+                          ✅ {achievement.missions_required} misiones
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditAchievement(achievement)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAchievement(achievement.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
