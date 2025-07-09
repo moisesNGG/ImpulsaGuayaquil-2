@@ -274,7 +274,94 @@ class MissionWithStatus(BaseModel):
     status: MissionStatus
     created_at: datetime
 
-# Utility functions
+async def initialize_demo_missions():
+    """Initialize demo missions with intelligent progression"""
+    # Check if missions already exist
+    existing_missions = await db.missions.count_documents({})
+    if existing_missions > 0:
+        return
+    
+    demo_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🎯 Misión 1: Bienvenida al Emprendimiento',
+            'description': 'Descubre los conceptos básicos del emprendimiento y da tu primer paso hacia el éxito.',
+            'type': 'microvideo',
+            'points_reward': 10,
+            'position': 1,
+            'content': {'video_url': 'https://example.com/video1'},
+            'requirements': [],  # Always available
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🚀 Misión 2: Fundamentos del Negocio',
+            'description': 'Explora los pilares fundamentales de cualquier negocio exitoso.',
+            'type': 'mini_quiz',
+            'points_reward': 15,
+            'position': 2,
+            'content': {
+                'questions': [
+                    {
+                        'question': '¿Cuál es el elemento más importante para emprender?',
+                        'options': ['Dinero', 'Conocimiento del mercado', 'Suerte', 'Contactos'],
+                        'correct': 1
+                    },
+                    {
+                        'question': '¿Qué significa MVP?',
+                        'options': ['Most Valuable Player', 'Minimum Viable Product', 'Maximum Value Product', 'Market Value Product'],
+                        'correct': 1
+                    }
+                ]
+            },
+            'requirements': [],  # Always available
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '💡 Misión 3: Ideación y Creatividad',
+            'description': 'Aprende técnicas para generar ideas innovadoras y creativas.',
+            'type': 'practical_task',
+            'points_reward': 20,
+            'position': 3,
+            'content': {'task': 'Genera 5 ideas de negocio para tu comunidad'},
+            'requirements': [],  # Always available
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📊 Misión 4: Análisis de Mercado',
+            'description': 'Comprende cómo investigar y analizar tu mercado objetivo.',
+            'type': 'downloadable_guide',
+            'points_reward': 25,
+            'position': 4,
+            'content': {'guide_url': 'https://example.com/market-analysis.pdf'},
+            'requirements': [],  # Sequential unlock after first mission
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '💰 Misión 5: Modelo de Negocio',
+            'description': 'Diseña un modelo de negocio sólido y rentable.',
+            'type': 'expert_advice',
+            'points_reward': 30,
+            'position': 5,
+            'content': {'expert_tips': 'Consejos de expertos en modelos de negocio'},
+            'requirements': [],  # Sequential unlock
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    await db.missions.insert_many(demo_missions)
+    print(f"Initialized {len(demo_missions)} demo missions")
+
+# Initialize demo missions on startup
+async def startup_event():
+    await initialize_demo_missions()
+
+# Call startup event
+import asyncio
+asyncio.create_task(startup_event())
 async def check_achievement_eligibility(user: User, achievement: "Achievement") -> bool:
     """Check if user is eligible for an achievement"""
     if achievement.condition == "complete_1_mission":
