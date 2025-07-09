@@ -68,6 +68,17 @@ class UserRole(str, Enum):
     ADMIN = "admin"
     EMPRENDEDOR = "emprendedor"
 
+class NotificationType(str, Enum):
+    NEW_ACHIEVEMENT = "new_achievement"
+    MISSION_AVAILABLE = "mission_available"
+    RANK_UP = "rank_up"
+    STREAK_MILESTONE = "streak_milestone"
+
+class MissionAttemptStatus(str, Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+    PENDING = "pending"
+
 # Security functions
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
