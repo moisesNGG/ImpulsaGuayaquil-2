@@ -484,6 +484,114 @@ frontend:
         agent: "main"
         comment: "Enhanced mobile-first design with better animations, loading states, and visual feedback."
 
+  - task: "Achievement eligibility display (only earned achievements)"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Fixed achievements tab to use /api/achievements/eligible endpoint instead of showing all achievements. Now users only see achievements they have earned."
+
+  - task: "Profile picture display on home screen"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added profile picture display in home screen user stats section. Shows profile image or user initials in rounded avatar."
+
+  - task: "Functional reward redemption buttons"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implemented functional 'Canjear' button that checks user points and redirects to external_url. Shows appropriate messages for insufficient points or missing URLs."
+
+  - task: "Functional event registration buttons"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implemented functional 'Registrarse' button that redirects to registration_url. Shows appropriate message for missing URLs."
+
+  - task: "Always-on app loading animation"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Modified main App component to always show AppLoadingAnimation when app starts, regardless of authentication state."
+
+  - task: "Enhanced mission completion animation"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Improved PointsAnimation component with animated stars, gradient backgrounds, progress bars, and floating dots for better visual feedback."
+
+  - task: "Improved video handling in missions"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Enhanced renderVideoPlayer function to detect YouTube URLs and handle external video links with proper UI for each type."
+
+  - task: "Enhanced admin panel with reward/event management"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Added new tabs for Rewards and Events management with full CRUD operations. Includes RewardModal and EventModal components."
+
+  - task: "Improved user management controls"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Enhanced user management table with delete functionality. Admin users cannot be deleted to maintain system integrity."
+
 metadata:
   created_by: "main_agent"
   version: "2.0"
