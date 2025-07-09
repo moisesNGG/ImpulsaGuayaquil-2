@@ -124,6 +124,7 @@ class User(BaseModel):
     points: int = 0
     rank: UserRank = UserRank.EMPRENDEDOR_NOVATO
     completed_missions: List[str] = []
+    profile_picture: Optional[str] = None  # Base64 encoded image
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
