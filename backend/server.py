@@ -288,6 +288,147 @@ async def check_achievement_eligibility(user: User, achievement: "Achievement") 
         return user.current_streak >= 7
     elif achievement.condition == "streak_30_days":
         return user.current_streak >= 30
+
+async def calculate_user_level(points: int) -> tuple[UserLevel, int]:
+    """Calculate user level based on points and return (level, points_in_level)"""
+    levels = [
+        (UserLevel.NOVATO, 0),
+        (UserLevel.PRINCIPIANTE, 100),
+        (UserLevel.INTERMEDIO, 300),
+        (UserLevel.AVANZADO, 600),
+        (UserLevel.EXPERTO, 1000),
+        (UserLevel.MAESTRO, 1500),
+        (UserLevel.LEYENDA, 2500)
+    ]
+    
+    current_level = UserLevel.NOVATO
+    level_points = points
+    
+    for level, threshold in reversed(levels):
+        if points >= threshold:
+            current_level = level
+            level_points = points - threshold
+            break
+    
+    return current_level, level_points
+
+async def check_badge_eligibility(user: User, badge: "Badge") -> bool:
+    """Check if user is eligible for a badge"""
+    condition = badge.condition
+    
+    if condition == "complete_first_mission":
+        return len(user.completed_missions) >= 1
+    elif condition == "complete_5_missions":
+        return len(user.completed_missions) >= 5
+    elif condition == "complete_10_missions":
+        return len(user.completed_missions) >= 10
+    elif condition == "complete_25_missions":
+        return len(user.completed_missions) >= 25
+    elif condition == "streak_3_days":
+        return user.current_streak >= 3
+    elif condition == "streak_7_days":
+        return user.current_streak >= 7
+    elif condition == "streak_15_days":
+        return user.current_streak >= 15
+    elif condition == "streak_30_days":
+        return user.current_streak >= 30
+    elif condition == "streak_100_days":
+        return user.current_streak >= 100
+    elif condition == "earn_100_points":
+        return user.points >= 100
+    elif condition == "earn_500_points":
+        return user.points >= 500
+    elif condition == "earn_1000_points":
+        return user.points >= 1000
+    elif condition == "earn_2500_points":
+        return user.points >= 2500
+    elif condition == "reach_level_principiante":
+        return user.level in [UserLevel.PRINCIPIANTE, UserLevel.INTERMEDIO, UserLevel.AVANZADO, UserLevel.EXPERTO, UserLevel.MAESTRO, UserLevel.LEYENDA]
+    elif condition == "reach_level_experto":
+        return user.level in [UserLevel.EXPERTO, UserLevel.MAESTRO, UserLevel.LEYENDA]
+    elif condition == "reach_level_maestro":
+        return user.level in [UserLevel.MAESTRO, UserLevel.LEYENDA]
+    elif condition == "reach_level_leyenda":
+        return user.level == UserLevel.LEYENDA
+    
+    return False
+
+async def award_badges_to_user(user: User):
+    """Check and award new badges to user"""
+    badges_awarded = []
+    
+    # Get all badges
+    all_badges = await db.badges.find().to_list(100)
+    
+    for badge_data in all_badges:
+        badge = Badge(**badge_data)
+        
+        # Check if user already has this badge
+        user_badge = await db.user_badges.find_one({"user_id": user.id, "badge_id": badge.id})
+        if user_badge:
+            continue
+        
+        # Check if user is eligible
+        if await check_badge_eligibility(user, badge):
+            # Award badge
+            new_user_badge = UserBadge(
+                user_id=user.id,
+                badge_id=badge.id
+            )
+            await db.user_badges.insert_one(new_user_badge.dict())
+            
+            # Update user's badge list
+            await db.users.update_one(
+                {"id": user.id},
+                {"$push": {"badges": badge.id}}
+            )
+            
+            badges_awarded.append(badge)
+            
+            # Create notification
+            notification = Notification(
+                user_id=user.id,
+                type=NotificationType.NEW_BADGE,
+                title=f"¡Nueva insignia desbloqueada!",
+                message=f"Has obtenido la insignia '{badge.title}' - {badge.description}",
+                data={"badge_id": badge.id, "badge_title": badge.title}
+            )
+            await db.notifications.insert_one(notification.dict())
+    
+    return badges_awarded
+
+async def check_and_update_user_level(user: User):
+    """Check and update user level, return True if level changed"""
+    new_level, level_points = await calculate_user_level(user.points)
+    
+    if new_level != user.level:
+        old_level = user.level
+        
+        # Update user level
+        await db.users.update_one(
+            {"id": user.id},
+            {
+                "$set": {
+                    "level": new_level,
+                    "level_points": level_points,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Create notification
+        notification = Notification(
+            user_id=user.id,
+            type=NotificationType.LEVEL_UP,
+            title=f"¡Subiste de nivel!",
+            message=f"Has alcanzado el nivel {new_level.value.title()}",
+            data={"old_level": old_level, "new_level": new_level}
+        )
+        await db.notifications.insert_one(notification.dict())
+        
+        return True
+    
+    return False
     return False
 
 async def update_user_streak(user_id: str):
