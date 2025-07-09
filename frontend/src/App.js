@@ -2630,8 +2630,18 @@ const UserApp = () => {
             <div className="bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl p-6 text-white">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-4">
-                  <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl">
-                    👤
+                  <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl overflow-hidden">
+                    {user?.profile_picture ? (
+                      <img 
+                        src={user.profile_picture} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white text-xl font-bold">
+                        {user?.nombre?.charAt(0)}{user?.apellido?.charAt(0)}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold">{user?.nombre} {user?.apellido}</h2>
