@@ -3463,6 +3463,7 @@ const UserApp = () => {
             {[
               { id: 'inicio', label: 'Inicio', icon: HomeIcon },
               { id: 'logros', label: 'Logros', icon: AchievementIcon },
+              { id: 'insignias', label: 'Insignias', icon: BadgeIcon },
               { id: 'recompensas', label: 'Recompensas', icon: RewardIcon },
               { id: 'eventos', label: 'Eventos', icon: EventIcon },
               { id: 'perfil', label: 'Perfil', icon: ProfileIcon }
