@@ -941,14 +941,36 @@ async def delete_achievement(achievement_id: str, current_user: User = Depends(g
 
 # Reward routes
 @api_router.post("/rewards", response_model=Reward)
-async def create_reward(reward: Reward, current_user: User = Depends(get_admin_user)):
-    await db.rewards.insert_one(reward.dict())
-    return reward
+async def create_reward(reward: RewardCreate, current_user: User = Depends(get_admin_user)):
+    new_reward = Reward(**reward.dict())
+    await db.rewards.insert_one(new_reward.dict())
+    return new_reward
 
 @api_router.get("/rewards", response_model=List[Reward])
 async def get_rewards():
     rewards = await db.rewards.find().to_list(100)
     return [Reward(**reward) for reward in rewards]
+
+@api_router.put("/rewards/{reward_id}", response_model=Reward)
+async def update_reward(reward_id: str, reward_data: RewardUpdate, current_user: User = Depends(get_admin_user)):
+    reward = await db.rewards.find_one({"id": reward_id})
+    if not reward:
+        raise HTTPException(status_code=404, detail="Reward not found")
+    
+    # Remove None values
+    update_data = {k: v for k, v in reward_data.dict().items() if v is not None}
+    if update_data:
+        await db.rewards.update_one({"id": reward_id}, {"$set": update_data})
+    
+    updated_reward = await db.rewards.find_one({"id": reward_id})
+    return Reward(**updated_reward)
+
+@api_router.delete("/rewards/{reward_id}")
+async def delete_reward(reward_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.rewards.delete_one({"id": reward_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Reward not found")
+    return {"message": "Reward deleted successfully"}
 
 # Event routes
 @api_router.post("/events", response_model=Event)
