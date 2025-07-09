@@ -151,6 +151,7 @@ class UserResponse(BaseModel):
     points: int
     rank: UserRank
     completed_missions: List[str]
+    profile_picture: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
