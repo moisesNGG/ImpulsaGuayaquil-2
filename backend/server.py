@@ -266,6 +266,13 @@ class MissionWithStatus(BaseModel):
     id: str
     title: str
     description: str
+    type: MissionType
+    points_reward: int
+    position: int
+    content: Dict[str, Any]
+    requirements: List[str]
+    status: MissionStatus
+    created_at: datetime
 
 # Utility functions
 async def check_achievement_eligibility(user: User, achievement: "Achievement") -> bool:
