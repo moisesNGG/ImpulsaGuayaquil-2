@@ -180,6 +180,154 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// App Loading Animation Component
+const AppLoadingAnimation = ({ onComplete }) => {
+  const [progress, setProgress] = useState(0);
+  const [showLogo, setShowLogo] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(timer);
+          setTimeout(() => onComplete(), 500);
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 50);
+
+    setTimeout(() => setShowLogo(true), 300);
+
+    return () => clearInterval(timer);
+  }, [onComplete]);
+
+  return (
+    <div className="fixed inset-0 bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center z-50">
+      <div className="text-center">
+        <div className={`transform transition-all duration-1000 ${showLogo ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}`}>
+          <div className="bg-white rounded-full p-8 shadow-2xl mb-6">
+            <div className="text-6xl font-bold text-cyan-600">🚀</div>
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-2">Impulsa</h1>
+          <h2 className="text-2xl text-cyan-100 mb-8">Guayaquil</h2>
+        </div>
+        
+        <div className="w-64 bg-white bg-opacity-20 rounded-full h-2 mb-4">
+          <div 
+            className="bg-white rounded-full h-2 transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        
+        <p className="text-white text-sm">Cargando tu experiencia emprendedora...</p>
+      </div>
+    </div>
+  );
+};
+
+// Points Animation Component
+const PointsAnimation = ({ points, onComplete }) => {
+  const [currentPoints, setCurrentPoints] = useState(0);
+  const [showAnimation, setShowAnimation] = useState(true);
+
+  useEffect(() => {
+    const animationDuration = 2000;
+    const incrementInterval = 50;
+    const increment = points / (animationDuration / incrementInterval);
+    
+    const timer = setInterval(() => {
+      setCurrentPoints(prev => {
+        const newPoints = prev + increment;
+        if (newPoints >= points) {
+          clearInterval(timer);
+          setTimeout(() => {
+            setShowAnimation(false);
+            onComplete();
+          }, 1000);
+          return points;
+        }
+        return newPoints;
+      });
+    }, incrementInterval);
+
+    return () => clearInterval(timer);
+  }, [points, onComplete]);
+
+  if (!showAnimation) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="text-center">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl">
+          <div className="text-6xl mb-4 animate-bounce">🎉</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Misión Completada!</h2>
+          <p className="text-gray-600 mb-6">Has ganado puntos</p>
+          
+          <div className="text-6xl font-bold text-cyan-600 mb-4">
+            +{Math.round(currentPoints)}
+          </div>
+          
+          <div className="flex items-center justify-center space-x-2">
+            <StarIcon />
+            <span className="text-lg font-medium text-gray-700">puntos</span>
+          </div>
+          
+          <div className="mt-6 flex justify-center">
+            <div className="animate-pulse">
+              <div className="w-4 h-4 bg-cyan-400 rounded-full mx-1 inline-block"></div>
+              <div className="w-4 h-4 bg-cyan-400 rounded-full mx-1 inline-block animation-delay-200"></div>
+              <div className="w-4 h-4 bg-cyan-400 rounded-full mx-1 inline-block animation-delay-400"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Notification Component
+const NotificationToast = ({ notification, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'new_achievement':
+        return '🏆';
+      case 'rank_up':
+        return '⬆️';
+      case 'streak_milestone':
+        return '🔥';
+      default:
+        return '📢';
+    }
+  };
+
+  return (
+    <div className="fixed top-4 right-4 bg-white rounded-lg shadow-xl p-4 max-w-sm z-50 border-l-4 border-cyan-500 animate-slide-in">
+      <div className="flex items-start space-x-3">
+        <div className="text-2xl">{getNotificationIcon(notification.type)}</div>
+        <div className="flex-1">
+          <h4 className="font-semibold text-gray-800">{notification.title}</h4>
+          <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Mission Detail View Component
 const MissionDetailView = ({ mission, onBack, onComplete }) => {
   const [loading, setLoading] = useState(false);
