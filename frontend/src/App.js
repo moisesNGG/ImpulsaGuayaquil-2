@@ -1268,12 +1268,18 @@ const AdminPanel = () => {
   const [missions, setMissions] = useState([]);
   const [users, setUsers] = useState([]);
   const [achievements, setAchievements] = useState([]);
+  const [rewards, setRewards] = useState([]);
+  const [events, setEvents] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [showMissionModal, setShowMissionModal] = useState(false);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [editingMission, setEditingMission] = useState(null);
   const [editingAchievement, setEditingAchievement] = useState(null);
+  const [editingReward, setEditingReward] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
   const { logout } = useAuth();
 
   useEffect(() => {
