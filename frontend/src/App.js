@@ -2790,7 +2790,16 @@ const UserApp = () => {
                     <div>📅 {new Date(event.date).toLocaleDateString('es-EC')}</div>
                     <div>👥 Organizado por {event.organizer}</div>
                   </div>
-                  <button className="mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg hover:from-cyan-600 hover:to-blue-700">
+                  <button 
+                    onClick={() => {
+                      if (event.registration_url) {
+                        window.open(event.registration_url, '_blank');
+                      } else {
+                        alert('Este evento no tiene enlace de registro configurado');
+                      }
+                    }}
+                    className="mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg hover:from-cyan-600 hover:to-blue-700"
+                  >
                     Registrarse
                   </button>
                 </div>
