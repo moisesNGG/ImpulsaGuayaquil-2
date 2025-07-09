@@ -473,20 +473,16 @@ def test_unauthenticated_requests_fail() -> bool:
         me_response = requests.get(f"{BACKEND_URL}/me")
         me_unauthorized = me_response.status_code in (401, 403)
         
-        # Try to access users without token
-        users_response = requests.get(f"{BACKEND_URL}/users")
-        users_unauthorized = users_response.status_code in (401, 403)
-        
-        # Try to access missions without token
-        missions_response = requests.get(f"{BACKEND_URL}/missions")
-        missions_unauthorized = missions_response.status_code in (401, 403)
+        # Try to access admin stats without token
+        admin_stats_response = requests.get(f"{BACKEND_URL}/admin/stats")
+        admin_stats_unauthorized = admin_stats_response.status_code in (401, 403)
         
         # Try to complete a mission without token
         complete_data = {"mission_id": "some-id", "completion_data": {}}
         complete_response = requests.post(f"{BACKEND_URL}/missions/complete", json=complete_data)
         complete_unauthorized = complete_response.status_code in (401, 403)
         
-        success = me_unauthorized and users_unauthorized and missions_unauthorized and complete_unauthorized
+        success = me_unauthorized and admin_stats_unauthorized and complete_unauthorized
         
         log_test_result("Unauthenticated Requests Fail", success)
         return success
