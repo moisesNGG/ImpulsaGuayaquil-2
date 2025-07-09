@@ -179,6 +179,30 @@ backend:
       - working: true
         agent: "testing"
         comment: "Verified role-based access control. Regular users cannot access admin-only endpoints. Users can only access their own data. Admin can access all user data. Authentication is required for protected endpoints."
+        
+  - task: "Achievement CRUD operations"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Tested all achievement CRUD operations. Admin can create, read, update, and delete achievements. Public endpoint for getting all achievements works correctly."
+
+  - task: "Profile picture update functionality"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Tested profile picture update functionality. Users can update their own profile pictures. Admin can update any user's profile picture. Authorization checks work correctly."
 
 frontend:
   - task: "Authentication UI (login/register)"
