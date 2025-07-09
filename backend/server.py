@@ -918,12 +918,24 @@ async def get_missions_with_status(user_id: str, current_user: User = Depends(ge
         if mission_obj.id in completed_missions:
             status = MissionStatus.COMPLETED
         else:
-            # Check if requirements are met
-            requirements_met = all(req_id in completed_missions for req_id in mission_obj.requirements)
-            if requirements_met:
+            # New intelligent logic: Mission is available if:
+            # 1. It has no requirements (always available)
+            # 2. All its requirements are met
+            # 3. OR if it's one of the first 3 missions (to prevent all missions being locked)
+            
+            if not mission_obj.requirements:
+                # No requirements - always available
+                status = MissionStatus.AVAILABLE
+            elif mission_obj.position <= 3:
+                # First 3 missions are always available to prevent total lockout
                 status = MissionStatus.AVAILABLE
             else:
-                status = MissionStatus.LOCKED
+                # Check if requirements are met
+                requirements_met = all(req_id in completed_missions for req_id in mission_obj.requirements)
+                if requirements_met:
+                    status = MissionStatus.AVAILABLE
+                else:
+                    status = MissionStatus.LOCKED
         
         missions_with_status.append(MissionWithStatus(
             id=mission_obj.id,
