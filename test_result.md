@@ -278,6 +278,8 @@ test_plan:
     - "User registration with complete fields"
     - "Admin routes for mission CRUD operations"
     - "Role-based access control"
+    - "Achievement CRUD operations"
+    - "Profile picture update functionality"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -287,3 +289,5 @@ agent_communication:
     message: "Enhanced MVP completed successfully! Added complete authentication system with cedula/password login, admin panel for mission management, interactive mission path with SVG animations, and user registration with all required fields. Admin user (0000000000/admin) created. Screenshots show login screen, admin panel, mission management, and user management all working correctly. Ready for comprehensive backend testing."
   - agent: "testing"
     message: "Completed comprehensive testing of the backend API. Fixed two issues: 1) The /api/users endpoint had an issue with MongoDB ObjectId handling, which was fixed by filtering out invalid user records. 2) Updated the unauthenticated requests test to focus on endpoints that should require authentication. All tests are now passing with 100% success rate. The authentication system, admin features, and role-based access control are working correctly."
+  - agent: "testing"
+    message: "Completed testing of the new features. All tests for Achievement CRUD operations and Profile Picture update functionality are passing with 100% success rate. The backend API is working correctly for all tested functionality including authentication, mission management, user management, achievements, and profile pictures."
