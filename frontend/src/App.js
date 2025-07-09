@@ -3311,19 +3311,22 @@ const UserApp = () => {
             <h3 className="text-2xl font-bold text-gray-800">Tus Logros</h3>
             <div className="grid gap-4">
               {achievements.map((achievement) => (
-                <div key={achievement.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-3xl">{achievement.icon}</div>
+                <div key={achievement.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-gray-800">{achievement.title}</h4>
-                      <p className="text-gray-600">{achievement.description}</p>
+                      <p className="text-gray-600 text-sm">{achievement.description}</p>
                     </div>
+                    <div className="text-2xl">🏆</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         );
+        
+      case 'insignias':
+        return <BadgesSection user={user} />;
         
       case 'recompensas':
         return (
