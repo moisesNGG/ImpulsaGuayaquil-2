@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Enhanced Impulsa Guayaquil app with authentication system (cedula/password login), admin panel for mission management, interactive mission path, and user registration with complete forms."
+user_problem_statement: "Enhanced Impulsa Guayaquil app with advanced features: user management, achievement eligibility, reward redemption, event registration, mission validation with cooldown, animations, and improved UX."
 
 backend:
   - task: "Authentication system with JWT tokens"
