@@ -1005,6 +1005,80 @@ async def delete_event(event_id: str, current_user: User = Depends(get_admin_use
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Event deleted successfully"}
 
+# Notification routes
+@api_router.get("/notifications", response_model=List[Notification])
+async def get_notifications(current_user: User = Depends(get_current_user)):
+    notifications = await db.notifications.find({"user_id": current_user.id}).sort("created_at", -1).to_list(50)
+    return [Notification(**notification) for notification in notifications]
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
+    notification = await db.notifications.find_one({"id": notification_id, "user_id": current_user.id})
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"read": True}}
+    )
+    
+    return {"message": "Notification marked as read"}
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.notifications.delete_one({"id": notification_id, "user_id": current_user.id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"message": "Notification deleted successfully"}
+
+# Mission attempt routes
+@api_router.get("/missions/{mission_id}/attempts", response_model=List[MissionAttempt])
+async def get_mission_attempts(mission_id: str, current_user: User = Depends(get_current_user)):
+    attempts = await db.mission_attempts.find({"user_id": current_user.id, "mission_id": mission_id}).sort("attempt_date", -1).to_list(10)
+    return [MissionAttempt(**attempt) for attempt in attempts]
+
+@api_router.get("/missions/{mission_id}/cooldown")
+async def check_mission_cooldown_status(mission_id: str, current_user: User = Depends(get_current_user)):
+    can_attempt = await check_mission_cooldown(current_user.id, mission_id)
+    
+    if can_attempt:
+        return {"can_attempt": True, "message": "Mission available"}
+    else:
+        user = await db.users.find_one({"id": current_user.id})
+        failed_missions = user.get("failed_missions", {})
+        failed_date = failed_missions[mission_id]
+        if isinstance(failed_date, str):
+            failed_date = datetime.fromisoformat(failed_date)
+        
+        retry_date = failed_date + timedelta(days=7)
+        remaining_hours = (retry_date - datetime.utcnow()).total_seconds() / 3600
+        
+        return {
+            "can_attempt": False,
+            "message": f"Mission in cooldown. Retry in {int(remaining_hours)} hours.",
+            "retry_after": retry_date
+        }
+
+# Ranking routes
+@api_router.get("/leaderboard")
+async def get_leaderboard(limit: int = 10, current_user: User = Depends(get_current_user)):
+    """Get user leaderboard"""
+    users = await db.users.find({"role": "emprendedor"}).sort("points", -1).limit(limit).to_list(limit)
+    
+    leaderboard = []
+    for i, user in enumerate(users):
+        leaderboard.append({
+            "rank": i + 1,
+            "name": f"{user.get('nombre', '')} {user.get('apellido', '')}",
+            "points": user.get("points", 0),
+            "rank_title": user.get("rank", UserRank.EMPRENDEDOR_NOVATO),
+            "current_streak": user.get("current_streak", 0),
+            "completed_missions": len(user.get("completed_missions", [])),
+            "is_current_user": user.get("id") == current_user.id
+        })
+    
+    return {"leaderboard": leaderboard}
+
 # Admin routes
 @api_router.get("/admin/stats", response_model=AdminStats)
 async def get_admin_stats(current_user: User = Depends(get_admin_user)):
@@ -1017,18 +1091,28 @@ async def get_admin_stats(current_user: User = Depends(get_admin_user)):
     total_completed_missions = sum(len(user.get("completed_missions", [])) for user in users)
     total_points_awarded = sum(user.get("points", 0) for user in users)
     
-    # Active users last week (simplified - users with points > 0)
-    active_users_last_week = await db.users.count_documents({"points": {"$gt": 0}})
+    # Active users last week (users with recent activity)
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    active_users_last_week = await db.users.count_documents({"updated_at": {"$gte": week_ago}})
     
-    # Most popular missions (simplified - first 5 missions)
-    missions = await db.missions.find().sort("position", 1).limit(5).to_list(5)
+    # Most popular missions (by completion count)
+    missions = await db.missions.find().to_list(1000)
+    mission_completions = {}
+    
+    for user in users:
+        for mission_id in user.get("completed_missions", []):
+            mission_completions[mission_id] = mission_completions.get(mission_id, 0) + 1
+    
+    # Sort missions by completion count
+    sorted_missions = sorted(missions, key=lambda m: mission_completions.get(m["id"], 0), reverse=True)[:5]
+    
     most_popular_missions = [
         {
             "id": mission["id"],
             "title": mission["title"],
-            "completions": 0  # Would need to implement completion tracking
+            "completions": mission_completions.get(mission["id"], 0)
         }
-        for mission in missions
+        for mission in sorted_missions
     ]
     
     return AdminStats(
