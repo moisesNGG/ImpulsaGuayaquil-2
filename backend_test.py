@@ -490,6 +490,191 @@ def test_unauthenticated_requests_fail() -> bool:
         log_test_result("Unauthenticated Requests Fail", False, error=str(e))
         return False
 
+# Achievement Tests
+def test_admin_create_achievement(admin_token: str) -> Optional[Dict[str, Any]]:
+    """Test admin creating a new achievement"""
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        unique_id = str(uuid.uuid4())[:8]
+        
+        achievement_data = {
+            "title": f"Test Achievement {unique_id}",
+            "description": "This is a test achievement created by the test script",
+            "icon": "🏆",
+            "condition": "test_condition",
+            "points_required": 50,
+            "missions_required": 2
+        }
+        
+        response = requests.post(f"{BACKEND_URL}/achievements", headers=headers, json=achievement_data)
+        
+        if response.status_code == 200:
+            achievement = response.json()
+            success = (
+                achievement.get("title") == achievement_data["title"] and
+                achievement.get("description") == achievement_data["description"] and
+                achievement.get("icon") == achievement_data["icon"] and
+                achievement.get("condition") == achievement_data["condition"] and
+                achievement.get("points_required") == achievement_data["points_required"] and
+                achievement.get("missions_required") == achievement_data["missions_required"] and
+                isinstance(achievement.get("id"), str) and
+                len(achievement.get("id")) > 0
+            )
+            log_test_result("Admin Create Achievement", success, response)
+            return achievement if success else None
+        else:
+            log_test_result("Admin Create Achievement", False, response, f"Unexpected status code: {response.status_code}")
+            return None
+    except Exception as e:
+        log_test_result("Admin Create Achievement", False, error=str(e))
+        return None
+
+def test_get_achievements() -> Optional[List[Dict[str, Any]]]:
+    """Test getting all achievements (public endpoint)"""
+    try:
+        response = requests.get(f"{BACKEND_URL}/achievements")
+        
+        if response.status_code == 200:
+            achievements = response.json()
+            success = isinstance(achievements, list)
+            log_test_result("Get Achievements", success, response)
+            return achievements if success else None
+        else:
+            log_test_result("Get Achievements", False, response, f"Unexpected status code: {response.status_code}")
+            return None
+    except Exception as e:
+        log_test_result("Get Achievements", False, error=str(e))
+        return None
+
+def test_admin_update_achievement(admin_token: str, achievement_id: str) -> bool:
+    """Test admin updating an achievement"""
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        unique_id = str(uuid.uuid4())[:8]
+        
+        update_data = {
+            "title": f"Updated Achievement {unique_id}",
+            "description": "This achievement was updated by the test script",
+            "points_required": 75
+        }
+        
+        response = requests.put(f"{BACKEND_URL}/achievements/{achievement_id}", headers=headers, json=update_data)
+        
+        if response.status_code == 200:
+            achievement = response.json()
+            success = (
+                achievement.get("title") == update_data["title"] and
+                achievement.get("description") == update_data["description"] and
+                achievement.get("points_required") == update_data["points_required"] and
+                achievement.get("id") == achievement_id
+            )
+            log_test_result("Admin Update Achievement", success, response)
+            return success
+        else:
+            log_test_result("Admin Update Achievement", False, response, f"Unexpected status code: {response.status_code}")
+            return False
+    except Exception as e:
+        log_test_result("Admin Update Achievement", False, error=str(e))
+        return False
+
+def test_admin_delete_achievement(admin_token: str, achievement_id: str) -> bool:
+    """Test admin deleting an achievement"""
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        response = requests.delete(f"{BACKEND_URL}/achievements/{achievement_id}", headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            success = data.get("message") == "Achievement deleted successfully"
+            log_test_result("Admin Delete Achievement", success, response)
+            return success
+        else:
+            log_test_result("Admin Delete Achievement", False, response, f"Unexpected status code: {response.status_code}")
+            return False
+    except Exception as e:
+        log_test_result("Admin Delete Achievement", False, error=str(e))
+        return False
+
+# Profile Picture Tests
+def test_update_profile_picture(token: str, user_id: str) -> bool:
+    """Test updating a user's profile picture"""
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        # Create a simple base64 encoded image (a small red dot)
+        base64_image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+        
+        profile_data = {
+            "profile_picture": base64_image
+        }
+        
+        response = requests.put(f"{BACKEND_URL}/users/{user_id}/profile-picture", headers=headers, json=profile_data)
+        
+        if response.status_code == 200:
+            user = response.json()
+            success = (
+                user.get("profile_picture") == base64_image and
+                user.get("id") == user_id
+            )
+            log_test_result("Update Profile Picture", success, response)
+            return success
+        else:
+            log_test_result("Update Profile Picture", False, response, f"Unexpected status code: {response.status_code}")
+            return False
+    except Exception as e:
+        log_test_result("Update Profile Picture", False, error=str(e))
+        return False
+
+def test_user_cannot_update_other_user_profile_picture(user_token: str, other_user_id: str) -> bool:
+    """Test that a user cannot update another user's profile picture"""
+    try:
+        headers = {"Authorization": f"Bearer {user_token}"}
+        
+        base64_image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+        
+        profile_data = {
+            "profile_picture": base64_image
+        }
+        
+        response = requests.put(f"{BACKEND_URL}/users/{other_user_id}/profile-picture", headers=headers, json=profile_data)
+        
+        # Should be forbidden
+        success = response.status_code == 403
+        
+        log_test_result("User Cannot Update Other User Profile Picture", success, response)
+        return success
+    except Exception as e:
+        log_test_result("User Cannot Update Other User Profile Picture", False, error=str(e))
+        return False
+
+def test_admin_can_update_any_user_profile_picture(admin_token: str, user_id: str) -> bool:
+    """Test that an admin can update any user's profile picture"""
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        
+        base64_image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+        
+        profile_data = {
+            "profile_picture": base64_image
+        }
+        
+        response = requests.put(f"{BACKEND_URL}/users/{user_id}/profile-picture", headers=headers, json=profile_data)
+        
+        if response.status_code == 200:
+            user = response.json()
+            success = (
+                user.get("profile_picture") == base64_image and
+                user.get("id") == user_id
+            )
+            log_test_result("Admin Can Update Any User Profile Picture", success, response)
+            return success
+        else:
+            log_test_result("Admin Can Update Any User Profile Picture", False, response, f"Unexpected status code: {response.status_code}")
+            return False
+    except Exception as e:
+        log_test_result("Admin Can Update Any User Profile Picture", False, error=str(e))
+        return False
+
 def run_all_tests():
     """Run all tests in sequence"""
     print("\n🚀 Starting Impulsa Guayaquil Backend API Tests\n")
