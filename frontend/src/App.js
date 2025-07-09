@@ -1556,6 +1556,17 @@ const UserApp = () => {
           </div>
         );
         
+      case 'mission-detail':
+        return selectedMission ? (
+          <MissionDetailView 
+            mission={selectedMission} 
+            onBack={() => setCurrentTab('inicio')}
+            onComplete={handleCompleteMission}
+          />
+        ) : (
+          <div>Misión no encontrada</div>
+        );
+        
       case 'perfil':
         return (
           <div className="space-y-6">
