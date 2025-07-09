@@ -144,11 +144,306 @@ const PlusIcon = () => (
   </svg>
 );
 
+const DownloadIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const BackIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  </svg>
+);
+
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
   </div>
 );
+
+// Mission Detail View Component
+const MissionDetailView = ({ mission, onBack, onComplete }) => {
+  const [loading, setLoading] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [showVideo, setShowVideo] = useState(false);
+
+  const handleComplete = async () => {
+    setLoading(true);
+    try {
+      await onComplete(mission.id, { 
+        completion_time: new Date().toISOString(),
+        quiz_answers: quizAnswers 
+      });
+    } catch (error) {
+      console.error('Error completing mission:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuizAnswer = (questionIndex, answer) => {
+    setQuizAnswers(prev => ({
+      ...prev,
+      [questionIndex]: answer
+    }));
+  };
+
+  const renderMissionContent = () => {
+    switch (mission.type) {
+      case 'microvideo':
+        return (
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="font-bold text-yellow-800 mb-2">📹 Instrucciones para el Video</h4>
+              <p className="text-yellow-700">{mission.content?.instructions || 'Graba tu video siguiendo las instrucciones'}</p>
+              {mission.content?.max_duration && (
+                <p className="text-sm text-yellow-600 mt-2">⏱️ Duración máxima: {mission.content.max_duration} segundos</p>
+              )}
+            </div>
+            
+            {mission.content?.topics && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-bold text-blue-800 mb-2">📝 Temas a cubrir:</h4>
+                <ul className="list-disc list-inside text-blue-700 space-y-1">
+                  {mission.content.topics.map((topic, index) => (
+                    <li key={index}>{topic}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="font-bold text-gray-800 mb-2">📱 Subir Video</h4>
+              <input 
+                type="file" 
+                accept="video/*" 
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+              <p className="text-sm text-gray-600 mt-2">Sube tu video aquí una vez que lo hayas grabado</p>
+            </div>
+          </div>
+        );
+
+      case 'downloadable_guide':
+        return (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 className="font-bold text-green-800 mb-2">📚 Guía Descargable</h4>
+              <p className="text-green-700 mb-4">Descarga y revisa la guía completa sobre {mission.title}</p>
+              
+              <button className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-600 hover:to-green-700 flex items-center space-x-2">
+                <DownloadIcon />
+                <span>Descargar Guía PDF</span>
+              </button>
+            </div>
+            
+            {mission.content?.topics && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-bold text-blue-800 mb-2">📖 Temas incluidos:</h4>
+                <ul className="list-disc list-inside text-blue-700 space-y-1">
+                  {mission.content.topics.map((topic, index) => (
+                    <li key={index}>{topic}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="font-bold text-gray-800 mb-2">✅ Confirmación de Lectura</h4>
+              <p className="text-gray-600 mb-3">{mission.content?.completion_requirement || 'Confirma que has leído la guía completa'}</p>
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" className="w-4 h-4" />
+                <span className="text-sm text-gray-700">He leído y comprendido la guía completa</span>
+              </label>
+            </div>
+          </div>
+        );
+
+      case 'mini_quiz':
+        return (
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h4 className="font-bold text-purple-800 mb-2">🧠 Mini Quiz</h4>
+              <p className="text-purple-700">Responde las siguientes preguntas para completar esta misión</p>
+            </div>
+            
+            {mission.content?.questions && mission.content.questions.map((question, index) => (
+              <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
+                <h4 className="font-bold text-gray-800 mb-3">{index + 1}. {question.question}</h4>
+                <div className="space-y-2">
+                  {question.options.map((option, optionIndex) => (
+                    <label key={optionIndex} className="flex items-center space-x-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name={`question-${index}`}
+                        value={optionIndex}
+                        onChange={(e) => handleQuizAnswer(index, parseInt(e.target.value))}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-gray-700">{option}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'expert_advice':
+        return (
+          <div className="space-y-4">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+              <h4 className="font-bold text-indigo-800 mb-2">🎓 Consejo de Experto</h4>
+              <p className="text-indigo-700">Aprende de la experiencia de nuestros expertos</p>
+            </div>
+            
+            {mission.content?.expert_name && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h4 className="font-bold text-gray-800 mb-2">👨‍💼 {mission.content.expert_name}</h4>
+                <p className="text-gray-600 mb-3">{mission.content.expert_title}</p>
+                
+                {mission.content?.video_url && (
+                  <div className="mb-4">
+                    <button 
+                      onClick={() => setShowVideo(!showVideo)}
+                      className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg font-medium hover:from-red-600 hover:to-red-700 flex items-center space-x-2"
+                    >
+                      <PlayIcon />
+                      <span>{showVideo ? 'Ocultar Video' : 'Ver Video'}</span>
+                    </button>
+                    
+                    {showVideo && (
+                      <div className="mt-4 bg-black rounded-lg p-4">
+                        <div className="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
+                          <div className="text-white text-center">
+                            <PlayIcon />
+                            <p className="mt-2">Video: {mission.content.expert_name}</p>
+                            <p className="text-sm text-gray-300">URL: {mission.content.video_url}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {mission.content?.key_points && (
+                  <div>
+                    <h5 className="font-bold text-gray-800 mb-2">💡 Puntos Clave:</h5>
+                    <ul className="list-disc list-inside text-gray-700 space-y-1">
+                      {mission.content.key_points.map((point, index) => (
+                        <li key={index}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'practical_task':
+        return (
+          <div className="space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h4 className="font-bold text-orange-800 mb-2">📝 Tarea Práctica</h4>
+              <p className="text-orange-700">Completa esta tarea práctica para aplicar lo aprendido</p>
+            </div>
+            
+            {mission.content?.template_sections && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h4 className="font-bold text-gray-800 mb-2">📋 Secciones del Template:</h4>
+                <ul className="list-disc list-inside text-gray-700 space-y-1 mb-4">
+                  {mission.content.template_sections.map((section, index) => (
+                    <li key={index}>{section}</li>
+                  ))}
+                </ul>
+                
+                <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 flex items-center space-x-2">
+                  <DownloadIcon />
+                  <span>Descargar Template</span>
+                </button>
+              </div>
+            )}
+            
+            {mission.content?.deadline_hours && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 className="font-bold text-red-800 mb-2">⏰ Tiempo Límite</h4>
+                <p className="text-red-700">{mission.content.deadline_hours} horas para completar</p>
+              </div>
+            )}
+            
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="font-bold text-gray-800 mb-2">📤 Subir Tarea</h4>
+              <input 
+                type="file" 
+                accept=".pdf,.doc,.docx" 
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+              <p className="text-sm text-gray-600 mt-2">Sube tu tarea completada aquí</p>
+            </div>
+          </div>
+        );
+
+      default:
+        return (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="font-bold text-gray-800 mb-2">📄 Contenido de la Misión</h4>
+            <p className="text-gray-700">Contenido específico de la misión disponible aquí</p>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center space-x-4">
+        <button 
+          onClick={onBack}
+          className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
+        >
+          <BackIcon />
+        </button>
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-gray-800">{mission.title}</h2>
+          <p className="text-gray-600">{mission.description}</p>
+        </div>
+        <div className="flex items-center space-x-1">
+          <StarIcon />
+          <span className="font-medium text-gray-700">{mission.points_reward}</span>
+        </div>
+      </div>
+
+      {/* Mission Content */}
+      <div className="space-y-4">
+        {renderMissionContent()}
+      </div>
+
+      {/* Complete Button */}
+      <div className="sticky bottom-0 bg-gradient-to-b from-cyan-50 to-blue-50 p-4 -mx-4 rounded-t-2xl">
+        <button
+          onClick={handleComplete}
+          disabled={loading}
+          className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white py-4 rounded-lg font-medium hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+        >
+          {loading ? <LoadingSpinner /> : (
+            <>
+              <CheckIcon />
+              <span>Completar Misión</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Login Component
 const LoginForm = ({ onToggleRegister }) => {
