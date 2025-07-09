@@ -7,7 +7,7 @@ import uuid
 from typing import Dict, Any, List, Optional, Tuple
 
 # Get the backend URL from the frontend/.env file
-BACKEND_URL = "https://c83cb33b-a761-4aab-88c1-6b19d5a1ae02.preview.emergentagent.com/api"
+BACKEND_URL = "https://3d3c705a-57e6-409e-8413-a9a66825a373.preview.emergentagent.com/api"
 
 # Test results tracking
 test_results = {
