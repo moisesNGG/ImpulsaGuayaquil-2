@@ -73,6 +73,11 @@ class NotificationType(str, Enum):
     MISSION_AVAILABLE = "mission_available"
     RANK_UP = "rank_up"
     STREAK_MILESTONE = "streak_milestone"
+    STREAK_WARNING = "streak_warning"
+    INACTIVITY_WARNING = "inactivity_warning"
+    NEW_BADGE = "new_badge"
+    LEVEL_UP = "level_up"
+    MISSION_RECOMMENDATION = "mission_recommendation"
 
 class MissionAttemptStatus(str, Enum):
     SUCCESS = "success"
