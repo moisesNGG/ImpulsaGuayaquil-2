@@ -434,6 +434,9 @@ const MissionDetailView = ({ mission, onBack, onComplete }) => {
   const renderVideoPlayer = (videoUrl) => {
     if (!videoUrl) return null;
     
+    // Check if it's a YouTube URL
+    const isYouTubeUrl = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be');
+    
     return (
       <div className="mb-6">
         <div className="bg-gray-100 rounded-lg p-4">
@@ -448,27 +451,42 @@ const MissionDetailView = ({ mission, onBack, onComplete }) => {
           </div>
           
           {showVideo && (
-            <div className="relative">
-              {!videoError ? (
-                <video
-                  controls
-                  className="w-full rounded-lg"
-                  onError={() => setVideoError(true)}
-                >
-                  <source src={videoUrl} type="video/mp4" />
-                  <p className="text-red-600">Tu navegador no soporta el elemento video.</p>
-                </video>
+            <div className="mt-4">
+              {isYouTubeUrl ? (
+                <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                  <iframe
+                    src={videoUrl.replace('watch?v=', 'embed/')}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Video de la Misión"
+                  />
+                </div>
               ) : (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-600">Error al cargar el video. Puedes acceder directamente:</p>
-                  <a
-                    href={videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
+                <div className="text-center">
+                  <div className="mb-4">
+                    <PlayIcon />
+                  </div>
+                  <p className="text-gray-600 mb-4">Enlace de video externo</p>
+                  <button
+                    onClick={() => window.open(videoUrl, '_blank')}
+                    className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700"
                   >
-                    Abrir video en nueva pestaña
-                  </a>
+                    Abrir Video
+                  </button>
+                </div>
+              )}
+              
+              {videoError && (
+                <div className="text-center py-4">
+                  <p className="text-red-600 mb-3">Error al cargar el video</p>
+                  <button
+                    onClick={() => window.open(videoUrl, '_blank')}
+                    className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700"
+                  >
+                    Abrir en Nueva Ventana
+                  </button>
                 </div>
               )}
             </div>
