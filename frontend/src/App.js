@@ -2454,7 +2454,16 @@ const ProfileSection = ({ user }) => {
 // Main App Component
 function App() {
   const [showRegister, setShowRegister] = useState(false);
+  const [showAppLoading, setShowAppLoading] = useState(true);
   const { user, loading } = useAuth();
+
+  const handleAppLoadingComplete = () => {
+    setShowAppLoading(false);
+  };
+
+  if (showAppLoading) {
+    return <AppLoadingAnimation onComplete={handleAppLoadingComplete} />;
+  }
 
   if (loading) {
     return (
