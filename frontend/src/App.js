@@ -72,12 +72,24 @@ const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  const refreshUser = async () => {
+    try {
+      const response = await axios.get(`${API}/me`);
+      setUser(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+      return null;
+    }
+  };
+
   const value = {
     user,
     token,
     login,
     register,
     logout,
+    refreshUser,
     loading
   };
 
