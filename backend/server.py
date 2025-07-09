@@ -933,6 +933,193 @@ async def get_missions_with_status(user_id: str, current_user: User = Depends(ge
     
     return missions_with_status
 
+# Badge routes
+@api_router.get("/badges", response_model=List[Badge])
+async def get_all_badges():
+    badges = await db.badges.find().to_list(100)
+    return [Badge(**badge) for badge in badges]
+
+@api_router.get("/badges/user/{user_id}", response_model=List[dict])
+async def get_user_badges(user_id: str, current_user: User = Depends(get_current_user)):
+    # Users can only see their own badges, unless they're admin
+    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    # Get user's badges with badge details
+    user_badges = await db.user_badges.find({"user_id": user_id}).to_list(100)
+    
+    result = []
+    for user_badge in user_badges:
+        badge = await db.badges.find_one({"id": user_badge["badge_id"]})
+        if badge:
+            result.append({
+                "badge": Badge(**badge),
+                "earned_at": user_badge["earned_at"],
+                "progress": user_badge["progress"]
+            })
+    
+    return result
+
+@api_router.post("/badges", response_model=Badge)
+async def create_badge(badge: Badge, current_user: User = Depends(get_admin_user)):
+    await db.badges.insert_one(badge.dict())
+    return badge
+
+@api_router.put("/badges/{badge_id}", response_model=Badge)
+async def update_badge(badge_id: str, badge_update: Badge, current_user: User = Depends(get_admin_user)):
+    badge_update.id = badge_id
+    result = await db.badges.update_one(
+        {"id": badge_id},
+        {"$set": badge_update.dict()}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Badge not found")
+    
+    updated_badge = await db.badges.find_one({"id": badge_id})
+    return Badge(**updated_badge)
+
+@api_router.delete("/badges/{badge_id}")
+async def delete_badge(badge_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.badges.delete_one({"id": badge_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Badge not found")
+    return {"message": "Badge deleted successfully"}
+
+# User Settings routes
+@api_router.get("/settings", response_model=UserSettings)
+async def get_user_settings(current_user: User = Depends(get_current_user)):
+    settings = await db.user_settings.find_one({"user_id": current_user.id})
+    if not settings:
+        # Create default settings
+        default_settings = UserSettings(user_id=current_user.id)
+        await db.user_settings.insert_one(default_settings.dict())
+        return default_settings
+    return UserSettings(**settings)
+
+@api_router.put("/settings", response_model=UserSettings)
+async def update_user_settings(settings_update: UserSettings, current_user: User = Depends(get_current_user)):
+    settings_update.user_id = current_user.id
+    settings_update.updated_at = datetime.utcnow()
+    
+    result = await db.user_settings.update_one(
+        {"user_id": current_user.id},
+        {"$set": settings_update.dict()},
+        upsert=True
+    )
+    
+    updated_settings = await db.user_settings.find_one({"user_id": current_user.id})
+    return UserSettings(**updated_settings)
+
+# Level and progress routes
+@api_router.get("/user/level")
+async def get_user_level_info(current_user: User = Depends(get_current_user)):
+    user = await db.users.find_one({"id": current_user.id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    current_level, level_points = await calculate_user_level(user["points"])
+    
+    # Calculate next level requirements
+    levels = [
+        (UserLevel.NOVATO, 0),
+        (UserLevel.PRINCIPIANTE, 100),
+        (UserLevel.INTERMEDIO, 300),
+        (UserLevel.AVANZADO, 600),
+        (UserLevel.EXPERTO, 1000),
+        (UserLevel.MAESTRO, 1500),
+        (UserLevel.LEYENDA, 2500)
+    ]
+    
+    next_level = None
+    points_to_next = None
+    
+    for i, (level, threshold) in enumerate(levels):
+        if level == current_level and i < len(levels) - 1:
+            next_level = levels[i + 1][0]
+            points_to_next = levels[i + 1][1] - user["points"]
+            break
+    
+    return {
+        "current_level": current_level,
+        "level_points": level_points,
+        "total_points": user["points"],
+        "next_level": next_level,
+        "points_to_next": points_to_next,
+        "progress_percentage": (level_points / (points_to_next + level_points)) * 100 if points_to_next else 100
+    }
+
+# Notification management with enhanced types
+@api_router.post("/notifications/push-subscription")
+async def save_push_subscription(subscription_data: dict, current_user: User = Depends(get_current_user)):
+    """Save push notification subscription for user"""
+    # Update user with push subscription info
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": {"push_subscription": subscription_data, "updated_at": datetime.utcnow()}}
+    )
+    return {"message": "Push subscription saved successfully"}
+
+@api_router.post("/notifications/send-test")
+async def send_test_notification(current_user: User = Depends(get_current_user)):
+    """Send test notification to user"""
+    notification = Notification(
+        user_id=current_user.id,
+        type=NotificationType.MISSION_RECOMMENDATION,
+        title="¡Notificación de prueba!",
+        message="Esta es una notificación de prueba para verificar que el sistema funciona correctamente.",
+        data={"test": True}
+    )
+    await db.notifications.insert_one(notification.dict())
+    return {"message": "Test notification sent"}
+
+# Mission recommendation system
+@api_router.get("/missions/recommendations")
+async def get_mission_recommendations(current_user: User = Depends(get_current_user)):
+    """Get personalized mission recommendations for user"""
+    user = await db.users.find_one({"id": current_user.id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get available missions
+    missions = await db.missions.find().sort("position", 1).to_list(100)
+    completed_missions = user.get("completed_missions", [])
+    
+    recommendations = []
+    for mission in missions:
+        mission_obj = Mission(**mission)
+        
+        # Skip completed missions
+        if mission_obj.id in completed_missions:
+            continue
+        
+        # Check if requirements are met
+        requirements_met = all(req_id in completed_missions for req_id in mission_obj.requirements)
+        if requirements_met:
+            # Calculate recommendation score based on user profile
+            score = 0
+            
+            # Prefer missions with higher points
+            score += mission_obj.points_reward * 0.1
+            
+            # Prefer missions suitable for user's level
+            if mission_obj.points_reward <= user["points"] * 0.5:
+                score += 10
+            
+            # Prefer certain types based on user's history
+            if len(completed_missions) < 3:
+                if mission_obj.type in [MissionType.MICROVIDEO, MissionType.MINI_QUIZ]:
+                    score += 15
+            
+            recommendations.append({
+                "mission": mission_obj,
+                "score": score,
+                "reason": f"Recomendada para tu nivel {user.get('level', 'novato')}"
+            })
+    
+    # Sort by score and return top 3
+    recommendations.sort(key=lambda x: x["score"], reverse=True)
+    return recommendations[:3]
+
 @api_router.post("/missions/complete")
 async def complete_mission(completion: MissionCompletion, current_user: User = Depends(get_current_user)):
     user = await db.users.find_one({"id": current_user.id})
