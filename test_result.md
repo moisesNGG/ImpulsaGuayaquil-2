@@ -600,14 +600,15 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Enhanced User Management (Admin only)"
-    - "Enhanced Mission System"
-    - "Achievement Eligibility System"
-    - "Enhanced Reward System"
-    - "Enhanced Event System"
-    - "Notification System"
-    - "Leaderboard System"
-    - "Enhanced Admin Stats"
+    - "Achievement eligibility display (only earned achievements)"
+    - "Profile picture display on home screen"
+    - "Functional reward redemption buttons"
+    - "Functional event registration buttons"
+    - "Always-on app loading animation"
+    - "Enhanced mission completion animation"
+    - "Improved video handling in missions"
+    - "Enhanced admin panel with reward/event management"
+    - "Improved user management controls"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
