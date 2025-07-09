@@ -155,6 +155,15 @@ class UserCreate(BaseModel):
     nombre_emprendimiento: str
     password: str
 
+class UserUpdate(BaseModel):
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
+    email: Optional[str] = None
+    nombre_emprendimiento: Optional[str] = None
+    role: Optional[UserRole] = None
+    points: Optional[int] = None
+    rank: Optional[UserRank] = None
+
 class UserLogin(BaseModel):
     cedula: str
     password: str
