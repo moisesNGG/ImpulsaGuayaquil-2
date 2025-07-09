@@ -14,6 +14,7 @@ from enum import Enum
 import jwt
 from passlib.context import CryptContext
 import hashlib
+import asyncio
 
 
 ROOT_DIR = Path(__file__).parent
