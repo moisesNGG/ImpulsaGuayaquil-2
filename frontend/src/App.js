@@ -1970,6 +1970,24 @@ const AdminPanel = () => {
           onSave={loadAdminData}
         />
       )}
+
+      {/* Reward Modal */}
+      {showRewardModal && (
+        <RewardModal
+          reward={editingReward}
+          onClose={() => setShowRewardModal(false)}
+          onSave={loadAdminData}
+        />
+      )}
+
+      {/* Event Modal */}
+      {showEventModal && (
+        <EventModal
+          event={editingEvent}
+          onClose={() => setShowEventModal(false)}
+          onSave={loadAdminData}
+        />
+      )}
     </div>
   );
 };
