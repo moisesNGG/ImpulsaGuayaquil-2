@@ -295,8 +295,27 @@ class Reward(BaseModel):
     type: str
     value: str
     points_cost: int
+    external_url: Optional[str] = None  # Nueva funcionalidad
     available_until: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RewardCreate(BaseModel):
+    title: str
+    description: str
+    type: str
+    value: str
+    points_cost: int
+    external_url: Optional[str] = None
+    available_until: Optional[datetime] = None
+
+class RewardUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    value: Optional[str] = None
+    points_cost: Optional[int] = None
+    external_url: Optional[str] = None
+    available_until: Optional[datetime] = None
 
 class Event(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
