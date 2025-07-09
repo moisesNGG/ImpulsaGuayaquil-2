@@ -233,6 +233,93 @@ class MissionWithStatus(BaseModel):
     id: str
     title: str
     description: str
+
+# Utility functions
+async def check_achievement_eligibility(user: User, achievement: "Achievement") -> bool:
+    """Check if user is eligible for an achievement"""
+    if achievement.condition == "complete_1_mission":
+        return len(user.completed_missions) >= 1
+    elif achievement.condition == "complete_5_missions":
+        return len(user.completed_missions) >= 5
+    elif achievement.condition == "reach_100_points":
+        return user.points >= 100
+    elif achievement.condition == "reach_500_points":
+        return user.points >= 500
+    elif achievement.condition == "reach_1000_points":
+        return user.points >= 1000
+    elif achievement.condition == "streak_5_days":
+        return user.current_streak >= 5
+    elif achievement.condition == "streak_10_days":
+        return user.current_streak >= 10
+    # Add more conditions as needed
+    return False
+
+async def update_user_streak(user_id: str):
+    """Update user's mission streak"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        return
+    
+    today = datetime.utcnow().date()
+    last_mission_date = user.get("last_mission_date")
+    
+    if last_mission_date:
+        last_date = last_mission_date.date() if isinstance(last_mission_date, datetime) else last_mission_date
+        if last_date == today:
+            # Same day, don't update streak
+            return
+        elif last_date == today - timedelta(days=1):
+            # Consecutive day, increase streak
+            new_streak = user.get("current_streak", 0) + 1
+        else:
+            # Streak broken, reset to 1
+            new_streak = 1
+    else:
+        # First mission
+        new_streak = 1
+    
+    # Update best streak if needed
+    best_streak = max(user.get("best_streak", 0), new_streak)
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "current_streak": new_streak,
+                "best_streak": best_streak,
+                "last_mission_date": datetime.utcnow()
+            }
+        }
+    )
+
+async def create_notification(user_id: str, notification_type: NotificationType, title: str, message: str, data: Dict[str, Any] = {}):
+    """Create a notification for a user"""
+    notification = Notification(
+        user_id=user_id,
+        type=notification_type,
+        title=title,
+        message=message,
+        data=data
+    )
+    await db.notifications.insert_one(notification.dict())
+
+async def check_mission_cooldown(user_id: str, mission_id: str) -> bool:
+    """Check if user can attempt a mission or is in cooldown"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        return True
+    
+    failed_missions = user.get("failed_missions", {})
+    if mission_id in failed_missions:
+        failed_date = failed_missions[mission_id]
+        if isinstance(failed_date, str):
+            failed_date = datetime.fromisoformat(failed_date)
+        
+        # Check if 7 days have passed
+        if datetime.utcnow() < failed_date + timedelta(days=7):
+            return False
+    
+    return True
     type: MissionType
     points_reward: int
     position: int
