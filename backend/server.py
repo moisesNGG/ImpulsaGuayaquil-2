@@ -84,6 +84,30 @@ class MissionAttemptStatus(str, Enum):
     FAILED = "failed"
     PENDING = "pending"
 
+class BadgeCategory(str, Enum):
+    ACHIEVEMENT = "achievement"
+    STREAK = "streak"
+    SOCIAL = "social"
+    SKILL = "skill"
+    MILESTONE = "milestone"
+    SPECIAL = "special"
+
+class BadgeRarity(str, Enum):
+    COMMON = "common"
+    UNCOMMON = "uncommon"
+    RARE = "rare"
+    EPIC = "epic"
+    LEGENDARY = "legendary"
+
+class UserLevel(str, Enum):
+    NOVATO = "novato"
+    PRINCIPIANTE = "principiante"
+    INTERMEDIO = "intermedio"
+    AVANZADO = "avanzado"
+    EXPERTO = "experto"
+    MAESTRO = "maestro"
+    LEYENDA = "leyenda"
+
 # Security functions
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
