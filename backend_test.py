@@ -784,6 +784,33 @@ def run_all_tests():
     
     test_unauthenticated_requests_fail()
     
+    # Test achievement functionality
+    print("\n🏆 Testing Achievement Functionality\n")
+    
+    # Test getting achievements (public endpoint)
+    test_get_achievements()
+    
+    # Test achievement CRUD operations (admin only)
+    created_achievement = test_admin_create_achievement(admin_token)
+    if created_achievement:
+        test_admin_update_achievement(admin_token, created_achievement["id"])
+        test_admin_delete_achievement(admin_token, created_achievement["id"])
+    
+    # Test profile picture functionality
+    print("\n🖼️ Testing Profile Picture Functionality\n")
+    
+    # Test user updating their own profile picture
+    if user_info:
+        test_update_profile_picture(user_token, user_info["id"])
+    
+    # Test user cannot update another user's profile picture
+    if user_info and second_user_info:
+        test_user_cannot_update_other_user_profile_picture(user_token, second_user_info["id"])
+    
+    # Test admin can update any user's profile picture
+    if admin_token and user_info:
+        test_admin_can_update_any_user_profile_picture(admin_token, user_info["id"])
+    
     # Clean up - delete the test mission if it was created
     if created_mission:
         test_admin_delete_mission(admin_token, created_mission["id"])
