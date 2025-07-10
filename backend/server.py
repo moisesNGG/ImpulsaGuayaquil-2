@@ -2530,56 +2530,310 @@ async def initialize_sample_data():
         event = Event(**event_data)
         await db.events.insert_one(event.dict())
     
-    # Create enhanced achievements
+    # Create comprehensive enhanced achievements
     sample_achievements = [
+        # Beginner Achievements
         {
-            "title": "Primer Paso",
+            "title": "🚀 Primer Paso",
             "description": "Completaste tu primera misión",
             "icon": "🚀",
             "condition": "complete_1_mission",
             "missions_required": 1
         },
         {
-            "title": "Emprendedor Activo",
+            "title": "🎯 Emprendedor Activo",
             "description": "Completaste 5 misiones",
             "icon": "⭐",
             "condition": "complete_5_missions",
             "missions_required": 5
         },
         {
-            "title": "Guayaquileño Comprometido",
+            "title": "🏆 Guayaquileño Comprometido",
             "description": "Alcanzaste 100 puntos",
             "icon": "🏆",
             "condition": "reach_100_points",
             "points_required": 100
         },
         {
-            "title": "Emprendedor Experimentado",
+            "title": "💎 Emprendedor Experimentado",
             "description": "Alcanzaste 500 puntos",
             "icon": "💎",
             "condition": "reach_500_points",
             "points_required": 500
         },
         {
-            "title": "Maestro Emprendedor",
+            "title": "👑 Maestro Emprendedor",
             "description": "Alcanzaste 1000 puntos",
             "icon": "👑",
             "condition": "reach_1000_points",
             "points_required": 1000
         },
         {
-            "title": "Racha de Fuego",
+            "title": "🔥 Racha de Fuego",
             "description": "Mantén una racha de 5 días completando misiones",
             "icon": "🔥",
             "condition": "streak_5_days",
             "missions_required": 5
         },
         {
-            "title": "Imparable",
+            "title": "⚡ Imparable",
             "description": "Mantén una racha de 10 días completando misiones",
             "icon": "⚡",
             "condition": "streak_10_days",
             "missions_required": 10
+        },
+        
+        # Intermediate Achievements
+        {
+            "title": "📈 Emprendedor Dedicado",
+            "description": "Completaste 10 misiones",
+            "icon": "📈",
+            "condition": "complete_10_missions",
+            "missions_required": 10
+        },
+        {
+            "title": "🌟 Estrella Emprendedora",
+            "description": "Completaste 15 misiones",
+            "icon": "🌟",
+            "condition": "complete_15_missions",
+            "missions_required": 15
+        },
+        {
+            "title": "💰 Coleccionista de Puntos",
+            "description": "Alcanzaste 1500 puntos",
+            "icon": "💰",
+            "condition": "reach_1500_points",
+            "points_required": 1500
+        },
+        {
+            "title": "🎖️ Emprendedor Élite",
+            "description": "Alcanzaste 2000 puntos",
+            "icon": "🎖️",
+            "condition": "reach_2000_points",
+            "points_required": 2000
+        },
+        {
+            "title": "🏃 Velocista",
+            "description": "Completa 3 misiones en un día",
+            "icon": "🏃",
+            "condition": "complete_3_missions_one_day",
+            "missions_required": 3
+        },
+        {
+            "title": "🔗 Racha Épica",
+            "description": "Mantén una racha de 15 días",
+            "icon": "🔗",
+            "condition": "streak_15_days",
+            "missions_required": 15
+        },
+        {
+            "title": "🎬 Creador de Contenido",
+            "description": "Completa 5 misiones de microvideo",
+            "icon": "🎬",
+            "condition": "complete_5_microvideo_missions",
+            "missions_required": 5
+        },
+        {
+            "title": "🧠 Cerebro Emprendedor",
+            "description": "Completa 5 mini-quizzes",
+            "icon": "🧠",
+            "condition": "complete_5_quiz_missions",
+            "missions_required": 5
+        },
+        {
+            "title": "📚 Estudiante Aplicado",
+            "description": "Completa 3 guías descargables",
+            "icon": "📚",
+            "condition": "complete_3_guide_missions",
+            "missions_required": 3
+        },
+        
+        # Advanced Achievements
+        {
+            "title": "🚀 Emprendedor Completo",
+            "description": "Completaste 20 misiones",
+            "icon": "🚀",
+            "condition": "complete_20_missions",
+            "missions_required": 20
+        },
+        {
+            "title": "🌐 Emprendedor Global",
+            "description": "Completaste 25 misiones",
+            "icon": "🌐",
+            "condition": "complete_25_missions",
+            "missions_required": 25
+        },
+        {
+            "title": "💎 Millonario en Puntos",
+            "description": "Alcanzaste 3000 puntos",
+            "icon": "💎",
+            "condition": "reach_3000_points",
+            "points_required": 3000
+        },
+        {
+            "title": "🏆 Leyenda Emprendedora",
+            "description": "Alcanzaste 5000 puntos",
+            "icon": "🏆",
+            "condition": "reach_5000_points",
+            "points_required": 5000
+        },
+        {
+            "title": "🔥 Racha Legendaria",
+            "description": "Mantén una racha de 30 días",
+            "icon": "🔥",
+            "condition": "streak_30_days",
+            "missions_required": 30
+        },
+        {
+            "title": "🎯 Máquina de Misiones",
+            "description": "Completa 5 misiones en un día",
+            "icon": "🎯",
+            "condition": "complete_5_missions_one_day",
+            "missions_required": 5
+        },
+        {
+            "title": "🎨 Artista Visual",
+            "description": "Completa 10 misiones de microvideo",
+            "icon": "🎨",
+            "condition": "complete_10_microvideo_missions",
+            "missions_required": 10
+        },
+        {
+            "title": "🧙 Sabio Emprendedor",
+            "description": "Completa 10 mini-quizzes",
+            "icon": "🧙",
+            "condition": "complete_10_quiz_missions",
+            "missions_required": 10
+        },
+        {
+            "title": "📖 Devorador de Guías",
+            "description": "Completa 8 guías descargables",
+            "icon": "📖",
+            "condition": "complete_8_guide_missions",
+            "missions_required": 8
+        },
+        {
+            "title": "🛠️ Ejecutor Experto",
+            "description": "Completa 8 tareas prácticas",
+            "icon": "🛠️",
+            "condition": "complete_8_practical_missions",
+            "missions_required": 8
+        },
+        
+        # Expert Achievements
+        {
+            "title": "🌟 Completista",
+            "description": "Completaste todas las misiones disponibles",
+            "icon": "🌟",
+            "condition": "complete_all_missions",
+            "missions_required": 30
+        },
+        {
+            "title": "👑 Emperador del Emprendimiento",
+            "description": "Alcanzaste 10000 puntos",
+            "icon": "👑",
+            "condition": "reach_10000_points",
+            "points_required": 10000
+        },
+        {
+            "title": "🔥 Racha Infinita",
+            "description": "Mantén una racha de 50 días",
+            "icon": "🔥",
+            "condition": "streak_50_days",
+            "missions_required": 50
+        },
+        {
+            "title": "⚡ Velocidad Luz",
+            "description": "Completa 10 misiones en un día",
+            "icon": "⚡",
+            "condition": "complete_10_missions_one_day",
+            "missions_required": 10
+        },
+        {
+            "title": "🎪 Showman Total",
+            "description": "Completa 15 misiones de microvideo",
+            "icon": "🎪",
+            "condition": "complete_15_microvideo_missions",
+            "missions_required": 15
+        },
+        {
+            "title": "🏛️ Templo del Conocimiento",
+            "description": "Completa 15 guías descargables",
+            "icon": "🏛️",
+            "condition": "complete_15_guide_missions",
+            "missions_required": 15
+        },
+        {
+            "title": "💪 Trabajador Incansable",
+            "description": "Completa 15 tareas prácticas",
+            "icon": "💪",
+            "condition": "complete_15_practical_missions",
+            "missions_required": 15
+        },
+        {
+            "title": "🎓 Profesor Emprendedor",
+            "description": "Completa 10 consejos de experto",
+            "icon": "🎓",
+            "condition": "complete_10_expert_advice_missions",
+            "missions_required": 10
+        },
+        
+        # Special Achievements
+        {
+            "title": "🎂 Aniversario",
+            "description": "Lleva un año en la plataforma",
+            "icon": "🎂",
+            "condition": "one_year_member",
+            "missions_required": 1
+        },
+        {
+            "title": "🌅 Madrugador",
+            "description": "Completa una misión antes de las 6 AM",
+            "icon": "🌅",
+            "condition": "complete_mission_before_6am",
+            "missions_required": 1
+        },
+        {
+            "title": "🦉 Búho Nocturno",
+            "description": "Completa una misión después de las 11 PM",
+            "icon": "🦉",
+            "condition": "complete_mission_after_11pm",
+            "missions_required": 1
+        },
+        {
+            "title": "🎯 Perfeccionista",
+            "description": "Obtén puntaje perfecto en 5 mini-quizzes",
+            "icon": "🎯",
+            "condition": "perfect_score_5_quizzes",
+            "missions_required": 5
+        },
+        {
+            "title": "🎪 Emprendedor del Mes",
+            "description": "Sé el emprendedor con más puntos del mes",
+            "icon": "🎪",
+            "condition": "top_monthly_entrepreneur",
+            "missions_required": 1
+        },
+        {
+            "title": "🏅 Influencer Emprendedor",
+            "description": "Comparte 10 misiones en redes sociales",
+            "icon": "🏅",
+            "condition": "share_10_missions",
+            "missions_required": 10
+        },
+        {
+            "title": "🤝 Mentor Guía",
+            "description": "Ayuda a 5 emprendedores novatos",
+            "icon": "🤝",
+            "condition": "help_5_beginners",
+            "missions_required": 5
+        },
+        {
+            "title": "🌟 Emprendedor Inspirador",
+            "description": "Recibe 50 'me gusta' en tus videos",
+            "icon": "🌟",
+            "condition": "receive_50_likes",
+            "missions_required": 1
         }
     ]
     
