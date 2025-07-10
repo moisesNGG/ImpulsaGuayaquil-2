@@ -435,6 +435,18 @@ backend:
         agent: "testing"
         comment: "Tested comprehensive sample data initialization system. The /api/initialize-data endpoint successfully creates: 30 missions with proper structure and emojis, 42 achievements with proper categories and conditions, 17 rewards with external URLs and points_cost, 12 events with proper dates and registration URLs. All data has proper structure validation, mission progression with position fields, achievement conditions and requirements, reward redemption functionality, and event registration functionality. Sample data initialization doesn't break existing functionality. All tests passed with 100% success rate."
 
+  - task: "New Admin User Credentials and Functionality"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Successfully tested the new admin user credentials and functionality transition with 100% success rate (10/10 tests passed). Verified: 1) New admin user with cedula 0944179175 and password Jamon123@ can login successfully 2) Old admin user with cedula 0000000000 has been removed and cannot login 3) New admin user has correct details (email: admin@impulsa.guayaquil.gob.ec, company: Impulsa Guayaquil, role: admin) 4) New admin can access all admin-only endpoints (stats, users) 5) Initialize-data endpoint works correctly with new admin configuration 6) New admin has full CRUD capabilities for missions, users, achievements, rewards, and events 7) All admin functionalities work seamlessly with new credentials. The admin user transition is complete and fully functional."
+
 frontend:
   - task: "Authentication UI (login/register)"
     implemented: true
