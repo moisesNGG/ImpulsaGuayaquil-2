@@ -3131,7 +3131,8 @@ const ProfileSection = ({ user }) => {
           profile_picture: base64Image
         });
         
-        // Refresh page to update user data
+        // Refresh user data without reloading page
+        window.location.hash = '#profile';
         window.location.reload();
       };
       reader.readAsDataURL(file);
