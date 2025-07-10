@@ -1675,10 +1675,11 @@ async def initialize_sample_data():
     await db.rewards.delete_many({})
     await db.events.delete_many({})
     
-    # Create sample missions
+    # Create comprehensive sample missions
     sample_missions = [
+        # Beginner Level Missions (1-10)
         {
-            "title": "Microvideo: Tu Historia Emprendedora",
+            "title": "🎬 Microvideo: Tu Historia Emprendedora",
             "description": "Graba un video de 60 segundos contando tu historia como emprendedor en Guayaquil",
             "type": "microvideo",
             "points_reward": 50,
@@ -1692,7 +1693,7 @@ async def initialize_sample_data():
             "created_by": "system"
         },
         {
-            "title": "Mini-Quiz: Fundamentos del Emprendimiento",
+            "title": "📝 Mini-Quiz: Fundamentos del Emprendimiento",
             "description": "Responde preguntas básicas sobre emprendimiento en Ecuador",
             "type": "mini_quiz",
             "points_reward": 30,
@@ -1720,7 +1721,7 @@ async def initialize_sample_data():
             "created_by": "system"
         },
         {
-            "title": "Guía Descargable: Trámites Legales",
+            "title": "📋 Guía Descargable: Trámites Legales",
             "description": "Descarga y revisa la guía completa de trámites para emprendedores en Ecuador",
             "type": "downloadable_guide",
             "points_reward": 40,
@@ -1734,7 +1735,7 @@ async def initialize_sample_data():
             "created_by": "system"
         },
         {
-            "title": "Tarea Práctica: Plan de Negocio Básico",
+            "title": "📈 Tarea Práctica: Plan de Negocio Básico",
             "description": "Crea un plan de negocio básico para tu emprendimiento siguiendo nuestra plantilla",
             "type": "practical_task",
             "points_reward": 80,
@@ -1753,7 +1754,7 @@ async def initialize_sample_data():
             "created_by": "system"
         },
         {
-            "title": "Consejo Experto: Networking en Guayaquil",
+            "title": "💡 Consejo Experto: Networking en Guayaquil",
             "description": "Aprende estrategias de networking específicas para el ecosistema emprendedor de Guayaquil",
             "type": "expert_advice",
             "points_reward": 35,
@@ -1767,6 +1768,486 @@ async def initialize_sample_data():
                     "Plataformas digitales locales",
                     "Cómo preparar tu elevator pitch",
                     "Seguimiento efectivo de contactos"
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "💰 Mini-Quiz: Finanzas para Emprendedores",
+            "description": "Aprende conceptos básicos de finanzas y gestión de dinero para tu negocio",
+            "type": "mini_quiz",
+            "points_reward": 45,
+            "position": 6,
+            "content": {
+                "questions": [
+                    {
+                        "question": "¿Qué es el flujo de caja?",
+                        "options": ["Dinero total de la empresa", "Dinero que entra y sale", "Ganancias del mes", "Inversión inicial"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Cuál es la diferencia entre ingreso y ganancia?",
+                        "options": ["Son lo mismo", "Ganancia = Ingreso - Gastos", "Ingreso = Ganancia + Gastos", "No hay diferencia"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Qué es un presupuesto?",
+                        "options": ["Dinero disponible", "Plan de gastos e ingresos", "Dinero guardado", "Inversión total"],
+                        "correct_answer": 1
+                    }
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎯 Tarea Práctica: Define tu Cliente Ideal",
+            "description": "Identifica y describe detalladamente tu cliente ideal (buyer persona)",
+            "type": "practical_task",
+            "points_reward": 60,
+            "position": 7,
+            "content": {
+                "template_sections": [
+                    "Datos demográficos",
+                    "Comportamiento de compra",
+                    "Problemas y necesidades",
+                    "Dónde encuentra información",
+                    "Qué lo motiva a comprar"
+                ],
+                "deadline_hours": 24
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "📱 Microvideo: Presenta tu Producto",
+            "description": "Graba un video de 90 segundos mostrando tu producto o servicio",
+            "type": "microvideo",
+            "points_reward": 70,
+            "position": 8,
+            "content": {
+                "instructions": "Muestra tu producto/servicio de manera atractiva y explica sus beneficios",
+                "max_duration": 90,
+                "topics": ["Qué es tu producto", "Beneficios clave", "Cómo funciona", "Por qué es único"]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🏆 Consejo Experto: Estrategias de Ventas",
+            "description": "Aprende técnicas de ventas efectivas para emprendedores principiantes",
+            "type": "expert_advice",
+            "points_reward": 55,
+            "position": 9,
+            "content": {
+                "expert_name": "María González",
+                "expert_title": "Consultora en Ventas - Guayaquil Chamber",
+                "video_url": "https://example.com/video-ventas.mp4",
+                "key_points": [
+                    "Técnicas de cierre de ventas",
+                    "Manejo de objeciones",
+                    "Construir relaciones a largo plazo",
+                    "Estrategias de seguimiento"
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "📊 Tarea Práctica: Análisis de Competencia",
+            "description": "Investiga y analiza a tu competencia directa e indirecta",
+            "type": "practical_task",
+            "points_reward": 65,
+            "position": 10,
+            "content": {
+                "template_sections": [
+                    "Competidores directos",
+                    "Competidores indirectos",
+                    "Precios de la competencia",
+                    "Fortalezas y debilidades",
+                    "Oportunidades identificadas"
+                ],
+                "deadline_hours": 36
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        
+        # Intermediate Level Missions (11-20)
+        {
+            "title": "🌐 Guía Descargable: Marketing Digital",
+            "description": "Descarga la guía completa de marketing digital para pequeños negocios",
+            "type": "downloadable_guide",
+            "points_reward": 50,
+            "position": 11,
+            "content": {
+                "guide_url": "https://example.com/guia-marketing-digital.pdf",
+                "topics": ["Redes sociales", "SEO básico", "Email marketing", "Publicidad online"],
+                "completion_requirement": "Implementar una estrategia de la guía"
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "📞 Tarea Práctica: Crear Elevator Pitch",
+            "description": "Desarrolla tu elevator pitch perfecto en 30 segundos",
+            "type": "practical_task",
+            "points_reward": 55,
+            "position": 12,
+            "content": {
+                "template_sections": [
+                    "Gancho inicial",
+                    "Problema que resuelves",
+                    "Tu solución",
+                    "Beneficio clave",
+                    "Llamada a la acción"
+                ],
+                "deadline_hours": 12
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "💡 Mini-Quiz: Innovación y Creatividad",
+            "description": "Desarrolla tu mentalidad innovadora y creativa",
+            "type": "mini_quiz",
+            "points_reward": 40,
+            "position": 13,
+            "content": {
+                "questions": [
+                    {
+                        "question": "¿Qué es la innovación disruptiva?",
+                        "options": ["Cambio pequeño", "Cambio radical", "Mejora continua", "Copia de ideas"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Cuál es la mejor fuente de ideas innovadoras?",
+                        "options": ["Internet", "Problemas no resueltos", "Competencia", "Libros"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Qué significa 'pensar fuera de la caja'?",
+                        "options": ["Ser ordenado", "Ser creativo", "Ser metódico", "Ser cauteloso"],
+                        "correct_answer": 1
+                    }
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎨 Microvideo: Storytelling de Marca",
+            "description": "Cuenta la historia de tu marca de manera emotiva y memorable",
+            "type": "microvideo",
+            "points_reward": 85,
+            "position": 14,
+            "content": {
+                "instructions": "Crea una historia que conecte emocionalmente con tu audiencia",
+                "max_duration": 120,
+                "topics": ["Origen de tu idea", "Desafíos superados", "Impacto en clientes", "Visión futura"]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎯 Consejo Experto: Gestión del Tiempo",
+            "description": "Aprende a maximizar tu productividad como emprendedor",
+            "type": "expert_advice",
+            "points_reward": 45,
+            "position": 15,
+            "content": {
+                "expert_name": "Roberto Silva",
+                "expert_title": "Coach de Productividad - Guayaquil Business Center",
+                "video_url": "https://example.com/video-productividad.mp4",
+                "key_points": [
+                    "Técnica Pomodoro",
+                    "Matriz de Eisenhower",
+                    "Automatización de tareas",
+                    "Delegación efectiva"
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "📈 Tarea Práctica: Proyección Financiera",
+            "description": "Crea proyecciones financieras realistas para tu negocio",
+            "type": "practical_task",
+            "points_reward": 90,
+            "position": 16,
+            "content": {
+                "template_sections": [
+                    "Ingresos proyectados",
+                    "Gastos operativos",
+                    "Punto de equilibrio",
+                    "Flujo de caja mensual",
+                    "Análisis de rentabilidad"
+                ],
+                "deadline_hours": 72
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🤝 Microvideo: Testimonios de Clientes",
+            "description": "Graba testimonios reales de tus clientes satisfechos",
+            "type": "microvideo",
+            "points_reward": 100,
+            "position": 17,
+            "content": {
+                "instructions": "Presenta testimonios auténticos que generen confianza",
+                "max_duration": 150,
+                "topics": ["Problema del cliente", "Solución proporcionada", "Resultados obtenidos", "Recomendación"]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🏪 Guía Descargable: Retail y Punto de Venta",
+            "description": "Optimiza tu punto de venta físico o virtual",
+            "type": "downloadable_guide",
+            "points_reward": 60,
+            "position": 18,
+            "content": {
+                "guide_url": "https://example.com/guia-retail.pdf",
+                "topics": ["Merchandising", "Experiencia del cliente", "Sistemas de pago", "Gestión de inventario"],
+                "completion_requirement": "Implementar 3 mejoras en tu punto de venta"
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎪 Tarea Práctica: Evento de Lanzamiento",
+            "description": "Planifica y ejecuta un evento de lanzamiento para tu producto",
+            "type": "practical_task",
+            "points_reward": 120,
+            "position": 19,
+            "content": {
+                "template_sections": [
+                    "Objetivos del evento",
+                    "Público objetivo",
+                    "Presupuesto y logística",
+                    "Plan de promoción",
+                    "Métricas de éxito"
+                ],
+                "deadline_hours": 96
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "💎 Mini-Quiz: Liderazgo Emprendedor",
+            "description": "Desarrolla habilidades de liderazgo para tu equipo",
+            "type": "mini_quiz",
+            "points_reward": 50,
+            "position": 20,
+            "content": {
+                "questions": [
+                    {
+                        "question": "¿Cuál es la principal cualidad de un líder emprendedor?",
+                        "options": ["Autoridad", "Inspiración", "Control", "Experiencia"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Cómo se motiva mejor a un equipo?",
+                        "options": ["Con dinero", "Con reconocimiento", "Con propósito", "Con presión"],
+                        "correct_answer": 2
+                    },
+                    {
+                        "question": "¿Qué es delegación efectiva?",
+                        "options": ["Dar órdenes", "Asignar tareas con objetivos claros", "Hacer todo uno mismo", "Controlar cada detalle"],
+                        "correct_answer": 1
+                    }
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        
+        # Advanced Level Missions (21-30)
+        {
+            "title": "🌟 Consejo Experto: Scaling Your Business",
+            "description": "Aprende estrategias para escalar tu negocio exitosamente",
+            "type": "expert_advice",
+            "points_reward": 80,
+            "position": 21,
+            "content": {
+                "expert_name": "Ana Delgado",
+                "expert_title": "CEO - Guayaquil Ventures",
+                "video_url": "https://example.com/video-scaling.mp4",
+                "key_points": [
+                    "Sistemas escalables",
+                    "Automatización de procesos",
+                    "Construcción de equipos",
+                    "Búsqueda de inversión"
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎬 Microvideo: Presentación de Inversión",
+            "description": "Graba tu pitch deck perfecto para inversores",
+            "type": "microvideo",
+            "points_reward": 150,
+            "position": 22,
+            "content": {
+                "instructions": "Presenta tu negocio como una oportunidad de inversión atractiva",
+                "max_duration": 180,
+                "topics": ["Problema y solución", "Tamaño del mercado", "Modelo de negocio", "Proyecciones financieras"]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🏅 Tarea Práctica: Plan de Expansión",
+            "description": "Desarrolla un plan detallado para expandir tu negocio",
+            "type": "practical_task",
+            "points_reward": 140,
+            "position": 23,
+            "content": {
+                "template_sections": [
+                    "Análisis de mercado objetivo",
+                    "Estrategia de entrada",
+                    "Recursos necesarios",
+                    "Timeline de implementación",
+                    "Análisis de riesgos"
+                ],
+                "deadline_hours": 120
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "💻 Guía Descargable: Transformación Digital",
+            "description": "Digitaliza tu negocio con herramientas modernas",
+            "type": "downloadable_guide",
+            "points_reward": 70,
+            "position": 24,
+            "content": {
+                "guide_url": "https://example.com/guia-digital.pdf",
+                "topics": ["E-commerce", "CRM", "Automatización", "Analytics"],
+                "completion_requirement": "Implementar 2 herramientas digitales"
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎯 Mini-Quiz: Estrategia Competitiva",
+            "description": "Domina las estrategias para competir en tu mercado",
+            "type": "mini_quiz",
+            "points_reward": 60,
+            "position": 25,
+            "content": {
+                "questions": [
+                    {
+                        "question": "¿Qué es ventaja competitiva?",
+                        "options": ["Ser el más barato", "Ser único y valioso", "Ser el primero", "Ser el más grande"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Cuál es la mejor estrategia para un mercado maduro?",
+                        "options": ["Competir en precio", "Diferenciación", "Copiar líderes", "Abandonar el mercado"],
+                        "correct_answer": 1
+                    },
+                    {
+                        "question": "¿Qué es un océano azul?",
+                        "options": ["Mercado saturado", "Nuevo mercado sin competencia", "Mercado en declive", "Mercado internacional"],
+                        "correct_answer": 1
+                    }
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🚀 Tarea Práctica: Innovación de Producto",
+            "description": "Desarrolla una innovación significativa para tu producto/servicio",
+            "type": "practical_task",
+            "points_reward": 130,
+            "position": 26,
+            "content": {
+                "template_sections": [
+                    "Identificación de oportunidades",
+                    "Concepto de innovación",
+                    "Validación con usuarios",
+                    "Plan de desarrollo",
+                    "Estrategia de lanzamiento"
+                ],
+                "deadline_hours": 96
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🎖️ Consejo Experto: Sostenibilidad Empresarial",
+            "description": "Construye un negocio sostenible y responsable",
+            "type": "expert_advice",
+            "points_reward": 75,
+            "position": 27,
+            "content": {
+                "expert_name": "Patricia Morales",
+                "expert_title": "Especialista en Sostenibilidad - EcoGuayaquil",
+                "video_url": "https://example.com/video-sostenibilidad.mp4",
+                "key_points": [
+                    "Responsabilidad social",
+                    "Impacto ambiental",
+                    "Economía circular",
+                    "Certificaciones verdes"
+                ]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "📺 Microvideo: Caso de Éxito",
+            "description": "Documenta un caso de éxito real de tu emprendimiento",
+            "type": "microvideo",
+            "points_reward": 160,
+            "position": 28,
+            "content": {
+                "instructions": "Presenta un caso de éxito detallado que inspire a otros emprendedores",
+                "max_duration": 200,
+                "topics": ["Desafío enfrentado", "Estrategia implementada", "Resultados obtenidos", "Lecciones aprendidas"]
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "🏆 Tarea Práctica: Mentoría a Otro Emprendedor",
+            "description": "Comparte tu experiencia mentoreando a otro emprendedor",
+            "type": "practical_task",
+            "points_reward": 200,
+            "position": 29,
+            "content": {
+                "template_sections": [
+                    "Perfil del mentoreado",
+                    "Objetivos de mentoría",
+                    "Plan de sesiones",
+                    "Herramientas compartidas",
+                    "Resultados alcanzados"
+                ],
+                "deadline_hours": 168
+            },
+            "requirements": [],
+            "created_by": "system"
+        },
+        {
+            "title": "👑 Consejo Experto: Legado Emprendedor",
+            "description": "Construye un legado duradero con tu emprendimiento",
+            "type": "expert_advice",
+            "points_reward": 100,
+            "position": 30,
+            "content": {
+                "expert_name": "Diego Zambrano",
+                "expert_title": "Fundador - Legacy Builders Guayaquil",
+                "video_url": "https://example.com/video-legado.mp4",
+                "key_points": [
+                    "Visión a largo plazo",
+                    "Impacto social",
+                    "Sucesión empresarial",
+                    "Inspiración para futuras generaciones"
                 ]
             },
             "requirements": [],
