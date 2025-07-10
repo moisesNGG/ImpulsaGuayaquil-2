@@ -3268,7 +3268,15 @@ const ProfileSection = ({ user }) => {
 // Main App Component
 function App() {
   const [showRegister, setShowRegister] = useState(false);
-  const [showAppLoading, setShowAppLoading] = useState(true);
+  const [showAppLoading, setShowAppLoading] = useState(() => {
+    // Only show loading animation on first app load
+    const hasShownLoading = localStorage.getItem('impulsa_app_loaded');
+    if (!hasShownLoading) {
+      localStorage.setItem('impulsa_app_loaded', 'true');
+      return true;
+    }
+    return false;
+  });
   const { user, loading } = useAuth();
 
   const handleAppLoadingComplete = () => {
