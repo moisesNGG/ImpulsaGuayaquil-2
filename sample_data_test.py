@@ -80,18 +80,10 @@ def get_admin_token() -> Optional[str]:
         return None
 
 def test_initialize_sample_data() -> bool:
-    """Test the /api/admin/initialize-sample-data endpoint"""
+    """Test the /api/initialize-data endpoint"""
     try:
-        # First, get admin token
-        admin_token = get_admin_token()
-        if not admin_token:
-            log_test_result("Initialize Sample Data", False, error="Could not get admin token")
-            return False
-        
-        headers = {"Authorization": f"Bearer {admin_token}"}
-        
-        # Test the initialize-data endpoint (note: it's /initialize-data not /admin/initialize-sample-data)
-        response = requests.post(f"{BACKEND_URL}/initialize-data", headers=headers)
+        # Test the initialize-data endpoint (no authentication required)
+        response = requests.post(f"{BACKEND_URL}/initialize-data")
         
         if response.status_code == 200:
             data = response.json()
