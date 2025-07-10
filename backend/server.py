@@ -2259,10 +2259,11 @@ async def initialize_sample_data():
         mission = Mission(**mission_data)
         await db.missions.insert_one(mission.dict())
     
-    # Create sample rewards
+    # Create comprehensive sample rewards
     sample_rewards = [
+        # Educational Rewards
         {
-            "title": "Certificado de Emprendedor Novato",
+            "title": "🎓 Certificado de Emprendedor Novato",
             "description": "Certificado digital que acredita tu participación en el programa",
             "type": "certificate",
             "value": "PDF Certificate",
@@ -2270,28 +2271,142 @@ async def initialize_sample_data():
             "external_url": "https://impulsa.guayaquil.gob.ec/certificado-novato"
         },
         {
-            "title": "Descuento en Consultoría",
-            "description": "20% de descuento en servicios de consultoría empresarial",
-            "type": "discount",
-            "value": "20% off",
-            "points_cost": 150,
-            "external_url": "https://impulsa.guayaquil.gob.ec/consultoria-descuento"
-        },
-        {
-            "title": "Entrada VIP a Evento",
-            "description": "Entrada prioritaria al próximo evento de emprendimiento en Guayaquil",
-            "type": "event_access",
-            "value": "VIP Access",
+            "title": "📚 Curso Online: Marketing Digital",
+            "description": "Acceso completo a curso de marketing digital para emprendedores",
+            "type": "course",
+            "value": "30-day access",
             "points_cost": 200,
-            "external_url": "https://impulsa.guayaquil.gob.ec/evento-vip"
+            "external_url": "https://impulsa.guayaquil.gob.ec/curso-marketing-digital"
         },
         {
-            "title": "Mentoría Personalizada",
+            "title": "🎯 Webinar Exclusivo: Estrategias de Ventas",
+            "description": "Acceso a webinar privado con expertos en ventas",
+            "type": "webinar",
+            "value": "2-hour session",
+            "points_cost": 150,
+            "external_url": "https://impulsa.guayaquil.gob.ec/webinar-ventas"
+        },
+        
+        # Financial Benefits
+        {
+            "title": "💰 Descuento en Consultoría Financiera",
+            "description": "30% de descuento en servicios de consultoría financiera",
+            "type": "discount",
+            "value": "30% off",
+            "points_cost": 100,
+            "external_url": "https://impulsa.guayaquil.gob.ec/consultoria-financiera"
+        },
+        {
+            "title": "🏦 Voucher de Cuenta Bancaria Gratuita",
+            "description": "Apertura gratuita de cuenta bancaria empresarial",
+            "type": "voucher",
+            "value": "$50 value",
+            "points_cost": 180,
+            "external_url": "https://impulsa.guayaquil.gob.ec/cuenta-bancaria"
+        },
+        {
+            "title": "📊 Análisis Crediticio Gratuito",
+            "description": "Evaluación gratuita de tu score crediticio y recomendaciones",
+            "type": "service",
+            "value": "Free analysis",
+            "points_cost": 120,
+            "external_url": "https://impulsa.guayaquil.gob.ec/analisis-crediticio"
+        },
+        
+        # Business Tools
+        {
+            "title": "🛠️ Kit de Herramientas Digitales",
+            "description": "Acceso a suite de herramientas digitales por 3 meses",
+            "type": "software",
+            "value": "3-month license",
+            "points_cost": 250,
+            "external_url": "https://impulsa.guayaquil.gob.ec/herramientas-digitales"
+        },
+        {
+            "title": "📱 Plantillas de Redes Sociales",
+            "description": "Pack de 50 plantillas profesionales para redes sociales",
+            "type": "templates",
+            "value": "50 templates",
+            "points_cost": 80,
+            "external_url": "https://impulsa.guayaquil.gob.ec/plantillas-social"
+        },
+        {
+            "title": "🖥️ Página Web Básica Gratuita",
+            "description": "Desarrollo de página web básica para tu emprendimiento",
+            "type": "website",
+            "value": "Basic website",
+            "points_cost": 500,
+            "external_url": "https://impulsa.guayaquil.gob.ec/pagina-web-gratis"
+        },
+        
+        # Mentorship & Networks
+        {
+            "title": "🤝 Mentoría Personalizada",
             "description": "Sesión de mentoría 1:1 con experto en emprendimiento",
             "type": "mentorship",
             "value": "1 hour session",
             "points_cost": 300,
             "external_url": "https://impulsa.guayaquil.gob.ec/mentoria-personalizada"
+        },
+        {
+            "title": "🌐 Membresía en Red de Emprendedores",
+            "description": "Acceso exclusivo a la red de emprendedores de Guayaquil por 6 meses",
+            "type": "membership",
+            "value": "6-month access",
+            "points_cost": 220,
+            "external_url": "https://impulsa.guayaquil.gob.ec/red-emprendedores"
+        },
+        {
+            "title": "🏢 Acceso a Espacios de Coworking",
+            "description": "5 días gratis en espacios de coworking premium",
+            "type": "coworking",
+            "value": "5 days free",
+            "points_cost": 160,
+            "external_url": "https://impulsa.guayaquil.gob.ec/coworking-gratis"
+        },
+        
+        # Marketing & Promotion
+        {
+            "title": "📢 Campaña de Promoción Gratuita",
+            "description": "Promoción de tu emprendimiento en canales oficiales",
+            "type": "promotion",
+            "value": "1-week campaign",
+            "points_cost": 400,
+            "external_url": "https://impulsa.guayaquil.gob.ec/promocion-gratuita"
+        },
+        {
+            "title": "📸 Sesión de Fotos Profesional",
+            "description": "Sesión fotográfica profesional para tu producto/servicio",
+            "type": "photography",
+            "value": "2-hour session",
+            "points_cost": 350,
+            "external_url": "https://impulsa.guayaquil.gob.ec/fotos-profesionales"
+        },
+        {
+            "title": "🎬 Video Promocional Básico",
+            "description": "Producción de video promocional de 60 segundos",
+            "type": "video",
+            "value": "60-second video",
+            "points_cost": 600,
+            "external_url": "https://impulsa.guayaquil.gob.ec/video-promocional"
+        },
+        
+        # Legal & Administrative
+        {
+            "title": "⚖️ Consulta Legal Gratuita",
+            "description": "Consulta legal especializada en temas empresariales",
+            "type": "legal",
+            "value": "1-hour consultation",
+            "points_cost": 180,
+            "external_url": "https://impulsa.guayaquil.gob.ec/consulta-legal"
+        },
+        {
+            "title": "📋 Trámites Empresariales Facilitados",
+            "description": "Asistencia para trámites de constitución empresarial",
+            "type": "administrative",
+            "value": "Full assistance",
+            "points_cost": 280,
+            "external_url": "https://impulsa.guayaquil.gob.ec/tramites-empresariales"
         }
     ]
     
