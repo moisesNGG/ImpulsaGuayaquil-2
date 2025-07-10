@@ -1654,20 +1654,23 @@ async def get_admin_stats(current_user: User = Depends(get_admin_user)):
 @api_router.post("/initialize-data")
 async def initialize_sample_data():
     # Create admin user if it doesn't exist
-    admin_user = await db.users.find_one({"cedula": "0000000000"})
+    admin_user = await db.users.find_one({"cedula": "0944179175"})
     if not admin_user:
         admin = User(
             nombre="Admin",
             apellido="Sistema",
-            cedula="0000000000",
-            email="admin@impulsa.guayaquil.ec",
-            nombre_emprendimiento="Sistema Impulsa Guayaquil",
-            hashed_password=get_password_hash("admin"),
+            cedula="0944179175",
+            email="admin@impulsa.guayaquil.gob.ec",
+            nombre_emprendimiento="Impulsa Guayaquil",
+            hashed_password=get_password_hash("Jamon123@"),
             role=UserRole.ADMIN,
             points=9999,
             rank=UserRank.EMPRENDEDOR_MASTER
         )
         await db.users.insert_one(admin.dict())
+    
+    # Remove old admin user if exists
+    await db.users.delete_many({"cedula": "0000000000"})
     
     # Clear existing data
     await db.missions.delete_many({})
