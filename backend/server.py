@@ -2414,11 +2414,11 @@ async def initialize_sample_data():
         reward = Reward(**reward_data)
         await db.rewards.insert_one(reward.dict())
     
-    # Create sample events
+    # Create comprehensive sample events
     sample_events = [
         {
-            "title": "Feria de Emprendimiento Guayaquil 2025",
-            "description": "Evento anual donde los emprendedores pueden mostrar sus proyectos",
+            "title": "🎪 Feria de Emprendimiento Guayaquil 2025",
+            "description": "Evento anual donde los emprendedores pueden mostrar sus proyectos y conectar con inversores",
             "location": "Centro de Convenciones de Guayaquil",
             "date": datetime(2025, 8, 15, 9, 0),
             "organizer": "Cámara de Comercio de Guayaquil",
@@ -2426,22 +2426,103 @@ async def initialize_sample_data():
             "registration_url": "https://impulsa.guayaquil.gob.ec/feria-emprendimiento-2025"
         },
         {
-            "title": "Workshop: Marketing Digital para Emprendedores",
-            "description": "Taller intensivo sobre estrategias de marketing digital",
-            "location": "ESPOL - Guayaquil",
-            "date": datetime(2025, 8, 5, 14, 0),
-            "organizer": "ESPOL Entrepreneurship Center",
-            "capacity": 50,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/workshop-marketing-digital"
+            "title": "💼 Taller: Finanzas para Emprendedores",
+            "description": "Aprende a manejar las finanzas de tu negocio desde cero",
+            "location": "Auditorio Universidad Católica",
+            "date": datetime(2025, 8, 10, 14, 0),
+            "organizer": "Universidad Católica de Guayaquil",
+            "capacity": 80,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/taller-finanzas"
         },
         {
-            "title": "Networking: Conecta con Inversores",
+            "title": "🤝 Networking: Conecta con Inversores",
             "description": "Evento de networking exclusivo para emprendedores y inversores",
             "location": "Hotel Hilton Colon Guayaquil",
             "date": datetime(2025, 8, 20, 18, 0),
             "organizer": "Angel Investors Guayaquil",
             "capacity": 100,
             "registration_url": "https://impulsa.guayaquil.gob.ec/networking-inversores"
+        },
+        {
+            "title": "🚀 Bootcamp: Lanzamiento de Startups",
+            "description": "Bootcamp intensivo de 3 días para acelerar tu startup",
+            "location": "Centro de Innovación Tecnológica",
+            "date": datetime(2025, 9, 5, 9, 0),
+            "organizer": "Startup Accelerator GYE",
+            "capacity": 50,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/bootcamp-startups"
+        },
+        {
+            "title": "🎯 Conferencia: Marketing Digital Avanzado",
+            "description": "Estrategias avanzadas de marketing digital para emprendedores",
+            "location": "Auditorio Banco Central",
+            "date": datetime(2025, 9, 12, 15, 0),
+            "organizer": "Digital Marketing Institute",
+            "capacity": 200,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/conferencia-marketing"
+        },
+        {
+            "title": "🌱 Seminario: Emprendimiento Sostenible",
+            "description": "Cómo crear negocios rentables y ambientalmente responsables",
+            "location": "Fundación Malecón 2000",
+            "date": datetime(2025, 9, 18, 10, 0),
+            "organizer": "EcoGuayaquil Foundation",
+            "capacity": 120,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/seminario-sostenible"
+        },
+        {
+            "title": "🎬 Pitch Day: Presenta tu Proyecto",
+            "description": "Presenta tu proyecto ante un panel de inversores y expertos",
+            "location": "Salón de Eventos Plaza Lagos",
+            "date": datetime(2025, 9, 25, 16, 0),
+            "organizer": "Venture Capital GYE",
+            "capacity": 30,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/pitch-day"
+        },
+        {
+            "title": "🏆 Concurso: Mejor Idea de Negocio",
+            "description": "Competencia para emprendedores con ideas innovadoras",
+            "location": "Universidad de Guayaquil",
+            "date": datetime(2025, 10, 2, 14, 0),
+            "organizer": "Universidad de Guayaquil",
+            "capacity": 150,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/concurso-ideas"
+        },
+        {
+            "title": "🎓 Masterclass: Liderazgo Empresarial",
+            "description": "Desarrolla habilidades de liderazgo para dirigir tu equipo",
+            "location": "Centro Empresarial Las Cámaras",
+            "date": datetime(2025, 10, 8, 17, 0),
+            "organizer": "Leadership Institute Ecuador",
+            "capacity": 60,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/masterclass-liderazgo"
+        },
+        {
+            "title": "💡 Hackathon: Soluciones Innovadoras",
+            "description": "48 horas creando soluciones tecnológicas para problemas locales",
+            "location": "Parque Tecnológico Guayaquil",
+            "date": datetime(2025, 10, 15, 18, 0),
+            "organizer": "Tech Community Guayaquil",
+            "capacity": 80,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/hackathon-2025"
+        },
+        {
+            "title": "🌐 Foro: Comercio Electrónico",
+            "description": "Tendencias y oportunidades en el comercio electrónico",
+            "location": "Hotel Sheraton Guayaquil",
+            "date": datetime(2025, 10, 22, 13, 0),
+            "organizer": "E-commerce Association Ecuador",
+            "capacity": 180,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/foro-ecommerce"
+        },
+        {
+            "title": "🎨 Taller: Branding y Diseño",
+            "description": "Crea una identidad visual impactante para tu marca",
+            "location": "Centro de Diseño Guayaquil",
+            "date": datetime(2025, 10, 29, 15, 30),
+            "organizer": "Design Studio GYE",
+            "capacity": 40,
+            "registration_url": "https://impulsa.guayaquil.gob.ec/taller-branding"
         }
     ]
     
