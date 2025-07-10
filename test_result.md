@@ -423,6 +423,18 @@ backend:
         agent: "testing"
         comment: "Tested enhanced admin stats. GET /api/admin/stats returns improved metrics including total users, total missions, completed missions, points awarded, active users, and most popular missions. The stats provide comprehensive insights for administrators."
 
+  - task: "Comprehensive Sample Data Initialization"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Tested comprehensive sample data initialization system. The /api/initialize-data endpoint successfully creates: 30 missions with proper structure and emojis, 42 achievements with proper categories and conditions, 17 rewards with external URLs and points_cost, 12 events with proper dates and registration URLs. All data has proper structure validation, mission progression with position fields, achievement conditions and requirements, reward redemption functionality, and event registration functionality. Sample data initialization doesn't break existing functionality. All tests passed with 100% success rate."
+
 frontend:
   - task: "Authentication UI (login/register)"
     implemented: true
