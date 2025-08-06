@@ -1,5 +1,13 @@
 {
   "appId": "com.impulsa.guayaquil",
   "appName": "Impulsa Guayaquil",
-  "webDir": "www"
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "minSdkVersion": 21,
+    "compileSdkVersion": 34,
+    "targetSdkVersion": 34
+  }
 }
