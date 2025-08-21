@@ -6,7 +6,7 @@ import sys
 from typing import Dict, Any, List, Optional
 
 # Get the backend URL from the frontend/.env file
-BACKEND_URL = "https://android-config.preview.emergentagent.com/api"
+BACKEND_URL = "https://debug-assembly-prep.preview.emergentagent.com/api"
 
 # Test results tracking
 test_results = {
