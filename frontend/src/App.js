@@ -2684,13 +2684,15 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-guayaquil-light">
-        <div className="grid grid-cols-5 max-w-md mx-auto">
+        <div className={`grid ${user.role === 'admin' ? 'grid-cols-6' : 'grid-cols-5'} max-w-lg mx-auto`}>
           {[
             { id: 'home', icon: HomeIcon, label: 'Inicio' },
             { id: 'progress', icon: MapIcon, label: 'Progreso' },
             { id: 'achievements', icon: AchievementIcon, label: 'Logros' },
             { id: 'rewards', icon: RewardIcon, label: 'Premios' },
-            { id: 'profile', icon: ProfileIcon, label: 'Perfil' }
+            { id: 'events', icon: EventIcon, label: 'Eventos' },
+            { id: 'profile', icon: ProfileIcon, label: 'Perfil' },
+            ...(user.role === 'admin' ? [{ id: 'admin', icon: AdminIcon, label: 'Admin' }] : [])
           ].map((tab) => (
             <button
               key={tab.id}
