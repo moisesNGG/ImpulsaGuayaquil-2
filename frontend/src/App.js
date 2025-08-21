@@ -2627,9 +2627,7 @@ const App = () => {
   const [notification, setNotification] = useState(null);
   const { user, loading } = useAuth();
 
-  const refreshUser = async () => {
-    // This will be implemented in the auth context
-  };
+  const { refreshUser } = useAuth();
 
   if (loading) {
     return (
