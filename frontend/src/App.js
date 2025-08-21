@@ -2607,7 +2607,7 @@ const AdminPanel = ({ user, onRefreshUser }) => {
                     <div className="text-sm text-gray-600">
                       <div>Estado: <span className="text-green-600 font-medium">Activo</span></div>
                       <div>Versión: v1.0.0</div>
-                      <div>Respuesta: <span className="text-green-600">< 100ms</span></div>
+                      <div>Respuesta: <span className="text-green-600">&lt; 100ms</span></div>
                     </div>
                   </div>
                 </div>
