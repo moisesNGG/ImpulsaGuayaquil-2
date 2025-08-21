@@ -2654,15 +2654,15 @@ const App = () => {
       case 'progress':
         return <ProgressMap user={user} onRefreshUser={refreshUser} />;
       case 'achievements':
-        return <div className="text-center py-20 text-guayaquil-text">Logros - En desarrollo</div>;
+        return <Achievements user={user} onRefreshUser={refreshUser} />;
       case 'rewards':
-        return <div className="text-center py-20 text-guayaquil-text">Recompensas - En desarrollo</div>;
+        return <Rewards user={user} onRefreshUser={refreshUser} />;
       case 'events':
-        return <div className="text-center py-20 text-guayaquil-text">Eventos - En desarrollo</div>;
+        return <Events user={user} onRefreshUser={refreshUser} />;
       case 'profile':
-        return <div className="text-center py-20 text-guayaquil-text">Perfil - En desarrollo</div>;
+        return <Profile user={user} onRefreshUser={refreshUser} />;
       case 'admin':
-        return <div className="text-center py-20 text-guayaquil-text">Panel Admin - En desarrollo</div>;
+        return <AdminPanel user={user} onRefreshUser={refreshUser} />;
       default:
         return <Home user={user} onRefreshUser={refreshUser} />;
     }
