@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,7 +8,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import uuid
 from datetime import datetime, timedelta
 from enum import Enum
@@ -15,7 +16,12 @@ import jwt
 from passlib.context import CryptContext
 import hashlib
 import asyncio
-
+import json
+import base64
+import qrcode
+from io import BytesIO
+import secrets
+import re
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -51,11 +57,16 @@ class MissionType(str, Enum):
     STAND_CHECKLIST = "stand_checklist"
     PITCH_SIMULATOR = "pitch_simulator"
     PROCESS_GUIDE = "process_guide"
+    DOCUMENT_UPLOAD = "document_upload"
+    NETWORKING_TASK = "networking_task"
+    MARKET_RESEARCH = "market_research"
+    BUSINESS_PLAN = "business_plan"
 
 class MissionStatus(str, Enum):
     LOCKED = "locked"
     AVAILABLE = "available"
     COMPLETED = "completed"
+    IN_REVIEW = "in_review"
 
 class UserRank(str, Enum):
     EMPRENDEDOR_NOVATO = "emprendedor_novato"
@@ -67,6 +78,9 @@ class UserRank(str, Enum):
 class UserRole(str, Enum):
     ADMIN = "admin"
     EMPRENDEDOR = "emprendedor"
+    REVISOR = "revisor"
+    CURADOR_CONTENIDOS = "curador_contenidos"
+    ALIADO = "aliado"
 
 class NotificationType(str, Enum):
     NEW_ACHIEVEMENT = "new_achievement"
@@ -78,6 +92,10 @@ class NotificationType(str, Enum):
     NEW_BADGE = "new_badge"
     LEVEL_UP = "level_up"
     MISSION_RECOMMENDATION = "mission_recommendation"
+    EVIDENCE_APPROVED = "evidence_approved"
+    EVIDENCE_REJECTED = "evidence_rejected"
+    EVENT_ELIGIBLE = "event_eligible"
+    REWARD_AVAILABLE = "reward_available"
 
 class MissionAttemptStatus(str, Enum):
     SUCCESS = "success"
@@ -107,6 +125,67 @@ class UserLevel(str, Enum):
     EXPERTO = "experto"
     MAESTRO = "maestro"
     LEYENDA = "leyenda"
+
+class DocumentType(str, Enum):
+    RUC = "ruc"
+    PITCH_VIDEO = "pitch_video"
+    BUSINESS_PLAN = "business_plan"
+    FINANCIAL_PROJECTION = "financial_projection"
+    LEGAL_DOCUMENTS = "legal_documents"
+    MARKET_RESEARCH = "market_research"
+    PROTOTYPE = "prototype"
+    REFERENCES = "references"
+
+class DocumentStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    REVISION_REQUIRED = "revision_required"
+
+class EligibilityStatus(str, Enum):
+    ELIGIBLE = "eligible"
+    PARTIAL = "partial"
+    NOT_ELIGIBLE = "not_eligible"
+
+class EventType(str, Enum):
+    FERIA = "feria"
+    RUEDA_NEGOCIOS = "rueda_negocios"
+    CAPACITACION = "capacitacion"
+    NETWORKING = "networking"
+    PITCH_COMPETITION = "pitch_competition"
+
+class RewardType(str, Enum):
+    DISCOUNT = "discount"
+    TRAINING = "training"
+    MENTORSHIP = "mentorship"
+    NETWORKING = "networking"
+    RESOURCES = "resources"
+    CERTIFICATION = "certification"
+    CONSULTATION = "consultation"
+    EQUIPMENT = "equipment"
+    CASH_PRIZE = "cash_prize"
+
+class RewardStatus(str, Enum):
+    AVAILABLE = "available"
+    RESERVED = "reserved"
+    REDEEMED = "redeemed"
+    EXPIRED = "expired"
+
+class LeagueType(str, Enum):
+    BRONCE = "bronce"
+    PLATA = "plata"
+    ORO = "oro"
+    DIAMANTE = "diamante"
+
+class CompetenceArea(str, Enum):
+    LEGAL = "legal"
+    VENTAS = "ventas"
+    PITCH = "pitch"
+    OPERACIONES = "operaciones"
+    FINANZAS = "finanzas"
+    HABILIDADES_BLANDAS = "habilidades_blandas"
+    MARKETING = "marketing"
+    INNOVACION = "innovacion"
 
 # Security functions
 def verify_password(plain_password, hashed_password):
@@ -145,7 +224,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return User(**user)
 
 async def get_admin_user(current_user: "User" = Depends(get_current_user)) -> "User":
-    if current_user.role != UserRole.ADMIN:
+    if current_user.role not in [UserRole.ADMIN, UserRole.CURADOR_CONTENIDOS]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    return current_user
+
+async def get_reviewer_user(current_user: "User" = Depends(get_current_user)) -> "User":
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -164,8 +251,9 @@ class User(BaseModel):
     role: UserRole = UserRole.EMPRENDEDOR
     rank: UserRank = UserRank.EMPRENDEDOR_NOVATO
     points: int = 0
+    coins: int = 0  # Nueva moneda virtual para canjes
     level: UserLevel = UserLevel.NOVATO
-    level_points: int = 0  # Points within current level
+    level_points: int = 0
     completed_missions: List[str] = []
     failed_missions: Dict[str, datetime] = {}
     profile_picture: Optional[str] = None
@@ -174,9 +262,12 @@ class User(BaseModel):
     best_streak: int = 0
     last_mission_date: Optional[datetime] = None
     last_activity: datetime = Field(default_factory=datetime.utcnow)
-    badges: List[str] = []  # List of badge IDs
+    badges: List[str] = []
     inactive_warning_sent: bool = False
     streak_warning_sent: bool = False
+    ciudad: str = "Guayaquil"  # Para sistema de ligas
+    cohorte: Optional[str] = None  # Para agrupaciones
+    weekly_xp: int = 0  # XP semanal para ligas
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -187,6 +278,8 @@ class UserCreate(BaseModel):
     email: str
     nombre_emprendimiento: str
     password: str
+    ciudad: str = "Guayaquil"
+    cohorte: Optional[str] = None
 
 class UserUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -195,7 +288,10 @@ class UserUpdate(BaseModel):
     nombre_emprendimiento: Optional[str] = None
     role: Optional[UserRole] = None
     points: Optional[int] = None
+    coins: Optional[int] = None
     rank: Optional[UserRank] = None
+    ciudad: Optional[str] = None
+    cohorte: Optional[str] = None
 
 class UserLogin(BaseModel):
     cedula: str
@@ -210,7 +306,9 @@ class UserResponse(BaseModel):
     nombre_emprendimiento: str
     role: UserRole
     points: int
+    coins: int
     rank: UserRank
+    level: UserLevel
     completed_missions: List[str]
     profile_picture: Optional[str] = None
     current_streak: int = 0
@@ -219,6 +317,9 @@ class UserResponse(BaseModel):
     favorite_rewards: List[str] = []
     total_missions_attempted: int = 0
     total_missions_completed: int = 0
+    ciudad: str
+    cohorte: Optional[str] = None
+    weekly_xp: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -227,20 +328,23 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
-class QuizQuestion(BaseModel):
-    question: str
-    options: List[str]
-    correct_answer: int
-
 class Mission(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     description: str
     type: MissionType
+    competence_area: CompetenceArea
     points_reward: int
+    coins_reward: int = 0
     position: int
     content: Dict[str, Any] = {}
     requirements: List[str] = []
+    prerequisite_missions: List[str] = []
+    required_for_events: List[str] = []  # Lista de IDs de eventos que requieren esta misión
+    evidence_required: bool = False
+    auto_approve: bool = True  # Si la evidencia se aprueba automáticamente
+    difficulty_level: int = 1  # 1-5
+    estimated_time: int = 30  # minutos
     created_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: str = ""
     
@@ -248,141 +352,1280 @@ class MissionCreate(BaseModel):
     title: str
     description: str
     type: MissionType
+    competence_area: CompetenceArea
     points_reward: int
+    coins_reward: int = 0
     position: int
     content: Dict[str, Any] = {}
     requirements: List[str] = []
+    prerequisite_missions: List[str] = []
+    required_for_events: List[str] = []
+    evidence_required: bool = False
+    auto_approve: bool = True
+    difficulty_level: int = 1
+    estimated_time: int = 30
 
 class MissionUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     type: Optional[MissionType] = None
+    competence_area: Optional[CompetenceArea] = None
     points_reward: Optional[int] = None
+    coins_reward: Optional[int] = None
     position: Optional[int] = None
     content: Optional[Dict[str, Any]] = None
     requirements: Optional[List[str]] = None
+    prerequisite_missions: Optional[List[str]] = None
+    required_for_events: Optional[List[str]] = None
+    evidence_required: Optional[bool] = None
+    auto_approve: Optional[bool] = None
+    difficulty_level: Optional[int] = None
+    estimated_time: Optional[int] = None
 
 class MissionWithStatus(BaseModel):
     id: str
     title: str
     description: str
     type: MissionType
+    competence_area: CompetenceArea
     points_reward: int
+    coins_reward: int
     position: int
     content: Dict[str, Any]
     requirements: List[str]
     status: MissionStatus
+    difficulty_level: int
+    estimated_time: int
+    progress_percentage: float = 0.0
     created_at: datetime
 
-async def initialize_demo_missions():
-    """Initialize demo missions with intelligent progression"""
-    # Check if missions already exist
+class MissionCompletion(BaseModel):
+    mission_id: str
+    completion_data: Dict[str, Any] = {}
+
+class MissionAttempt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    mission_id: str
+    status: MissionAttemptStatus
+    score: Optional[float] = None
+    answers: Dict[str, Any] = {}
+    attempt_date: datetime = Field(default_factory=datetime.utcnow)
+    can_retry_after: Optional[datetime] = None
+
+class Evidence(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    mission_id: str
+    document_type: Optional[DocumentType] = None
+    file_path: str
+    file_name: str
+    file_size: int
+    mime_type: str
+    description: str = ""
+    status: DocumentStatus = DocumentStatus.PENDING
+    reviewed_by: Optional[str] = None
+    review_notes: str = ""
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+
+class EvidenceCreate(BaseModel):
+    mission_id: str
+    document_type: Optional[DocumentType] = None
+    description: str = ""
+
+class EvidenceReview(BaseModel):
+    status: DocumentStatus
+    review_notes: str = ""
+
+class Document(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    document_type: DocumentType
+    file_path: str
+    file_name: str
+    file_size: int
+    mime_type: str
+    status: DocumentStatus = DocumentStatus.PENDING
+    reviewed_by: Optional[str] = None
+    review_notes: str = ""
+    expiry_date: Optional[datetime] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed_at: Optional[datetime] = None
+
+class DocumentUpload(BaseModel):
+    document_type: DocumentType
+    expiry_date: Optional[datetime] = None
+
+class EligibilityRule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    event_id: str
+    rule_name: str
+    condition: str  # JSON DSL simple, ej: {"and": [{"missions": ["id1", "id2"]}, {"documents": ["ruc"]}, {"points": {"min": 500}}]}
+    weight: float = 1.0  # Peso de esta regla (0-1)
+    description: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class EligibilityRuleCreate(BaseModel):
+    rule_name: str
+    condition: str
+    weight: float = 1.0
+    description: str = ""
+
+class Event(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    event_type: EventType
+    location: str
+    date: datetime
+    end_date: Optional[datetime] = None
+    organizer: str
+    capacity: Optional[int] = None
+    registered_users: List[str] = []
+    eligibility_rules: List[str] = []  # IDs de reglas de elegibilidad
+    registration_url: Optional[str] = None
+    qr_check_in_enabled: bool = True
+    ciudad: str = "Guayaquil"
+    cupos_disponibles: Optional[int] = None
+    precio: float = 0.0
+    imagen_url: Optional[str] = None
+    tags: List[str] = []
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class EventCreate(BaseModel):
+    title: str
+    description: str
+    event_type: EventType
+    location: str
+    date: datetime
+    end_date: Optional[datetime] = None
+    organizer: str
+    capacity: Optional[int] = None
+    registration_url: Optional[str] = None
+    qr_check_in_enabled: bool = True
+    ciudad: str = "Guayaquil"
+    cupos_disponibles: Optional[int] = None
+    precio: float = 0.0
+    imagen_url: Optional[str] = None
+    tags: List[str] = []
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    event_type: Optional[EventType] = None
+    location: Optional[str] = None
+    date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    organizer: Optional[str] = None
+    capacity: Optional[int] = None
+    registration_url: Optional[str] = None
+    qr_check_in_enabled: Optional[bool] = None
+    ciudad: Optional[str] = None
+    cupos_disponibles: Optional[int] = None
+    precio: Optional[float] = None
+    imagen_url: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+class EventEligibility(BaseModel):
+    event_id: str
+    user_id: str
+    status: EligibilityStatus
+    eligibility_percentage: float
+    missing_requirements: List[Dict[str, Any]] = []
+    calculated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class QRToken(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    event_id: Optional[str] = None
+    token: str
+    status: EligibilityStatus
+    user_info: Dict[str, Any]
+    expires_at: datetime
+    used: bool = False
+    used_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Reward(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    reward_type: RewardType
+    value: str
+    coins_cost: int  # Cambio de points_cost a coins_cost
+    stock: int = -1  # -1 significa stock ilimitado
+    stock_consumed: int = 0
+    external_url: Optional[str] = None
+    qr_code: Optional[str] = None  # Para canjes físicos
+    available_until: Optional[datetime] = None
+    ciudad: str = "Guayaquil"
+    partner_company: Optional[str] = None
+    terms_conditions: str = ""
+    image_url: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RewardCreate(BaseModel):
+    title: str
+    description: str
+    reward_type: RewardType
+    value: str
+    coins_cost: int
+    stock: int = -1
+    external_url: Optional[str] = None
+    qr_code: Optional[str] = None
+    available_until: Optional[datetime] = None
+    ciudad: str = "Guayaquil"
+    partner_company: Optional[str] = None
+    terms_conditions: str = ""
+    image_url: Optional[str] = None
+
+class RewardUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    reward_type: Optional[RewardType] = None
+    value: Optional[str] = None
+    coins_cost: Optional[int] = None
+    stock: Optional[int] = None
+    external_url: Optional[str] = None
+    qr_code: Optional[str] = None
+    available_until: Optional[datetime] = None
+    ciudad: Optional[str] = None
+    partner_company: Optional[str] = None
+    terms_conditions: Optional[str] = None
+    image_url: Optional[str] = None
+
+class RewardRedemption(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    reward_id: str
+    redemption_code: str
+    status: RewardStatus = RewardStatus.RESERVED
+    redeemed_at: datetime = Field(default_factory=datetime.utcnow)
+    used_at: Optional[datetime] = None
+    qr_code_data: Optional[str] = None
+
+class League(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    league_type: LeagueType
+    ciudad: str
+    cohorte: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    participants: List[str] = []  # user_ids
+    winners: List[Dict[str, Any]] = []  # Top participantes con sus puntos
+    is_active: bool = True
+    rewards: List[str] = []  # reward_ids para ganadores
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class LeagueCreate(BaseModel):
+    name: str
+    league_type: LeagueType
+    ciudad: str
+    cohorte: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    rewards: List[str] = []
+
+class Notification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    type: NotificationType
+    title: str
+    message: str
+    data: Dict[str, Any] = {}
+    read: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Badge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    icon: str
+    category: BadgeCategory
+    rarity: BadgeRarity
+    condition: str
+    coins_reward: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserBadge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    badge_id: str
+    earned_at: datetime = Field(default_factory=datetime.utcnow)
+    progress: float = 1.0
+
+class AdminStats(BaseModel):
+    total_users: int
+    total_missions: int
+    total_completed_missions: int
+    total_points_awarded: int
+    total_coins_awarded: int
+    active_users_last_week: int
+    active_users_last_month: int
+    most_popular_missions: List[Dict[str, Any]]
+    completion_rate_by_competence: Dict[str, float]
+    user_distribution_by_city: Dict[str, int]
+    weekly_engagement_trend: List[Dict[str, Any]]
+    top_performers: List[Dict[str, Any]]
+    event_attendance_stats: Dict[str, Any]
+    reward_redemption_stats: Dict[str, Any]
+
+class ImpactMetrics(BaseModel):
+    period: str  # "weekly", "monthly", "quarterly"
+    date_range: Dict[str, datetime]
+    total_entrepreneurs: int
+    active_entrepreneurs: int
+    missions_completed: int
+    events_attended: int
+    business_plans_completed: int
+    ruc_registrations: int
+    pitch_videos_submitted: int
+    networking_connections: int
+    mentorship_sessions: int
+    funding_applications: int
+    jobs_created: int
+    revenue_generated: float
+    participant_satisfaction: float
+    knowledge_improvement: float
+    business_survival_rate: float
+
+# Initialize demo content
+async def initialize_demo_content():
+    """Initialize comprehensive demo content"""
+    # Check if content already exists
     existing_missions = await db.missions.count_documents({})
     if existing_missions > 0:
         return
     
-    demo_missions = [
+    # Comprehensive Mission Set organized by competence areas
+    demo_missions = []
+    
+    # LEGAL Competence Area
+    legal_missions = [
         {
             'id': str(uuid.uuid4()),
-            'title': '🎯 Misión 1: Bienvenida al Emprendimiento',
-            'description': 'Descubre los conceptos básicos del emprendimiento y da tu primer paso hacia el éxito.',
-            'type': 'microvideo',
-            'points_reward': 10,
+            'title': '⚖️ Fundamentos Legales del Emprendimiento',
+            'description': 'Aprende los aspectos legales básicos que todo emprendedor debe conocer.',
+            'type': 'downloadable_guide',
+            'competence_area': 'legal',
+            'points_reward': 50,
+            'coins_reward': 25,
             'position': 1,
-            'content': {'video_url': 'https://example.com/video1'},
-            'requirements': [],  # Always available
+            'content': {
+                'guide_url': 'https://example.com/legal-guide.pdf',
+                'topics': ['Tipos de empresa', 'Constitución legal', 'Obligaciones tributarias', 'Contratos básicos'],
+                'completion_requirement': 'Lee la guía completa y completa el quiz de comprensión.'
+            },
+            'evidence_required': False,
+            'auto_approve': True,
+            'difficulty_level': 2,
+            'estimated_time': 45,
             'created_at': datetime.utcnow()
         },
         {
             'id': str(uuid.uuid4()),
-            'title': '🚀 Misión 2: Fundamentos del Negocio',
-            'description': 'Explora los pilares fundamentales de cualquier negocio exitoso.',
-            'type': 'mini_quiz',
-            'points_reward': 15,
+            'title': '📋 Registro de RUC - Paso a Paso',
+            'description': 'Guía completa para registrar tu RUC y formalizar tu emprendimiento.',
+            'type': 'document_upload',
+            'competence_area': 'legal',
+            'points_reward': 100,
+            'coins_reward': 50,
             'position': 2,
             'content': {
-                'questions': [
-                    {
-                        'question': '¿Cuál es el elemento más importante para emprender?',
-                        'options': ['Dinero', 'Conocimiento del mercado', 'Suerte', 'Contactos'],
-                        'correct': 1
-                    },
-                    {
-                        'question': '¿Qué significa MVP?',
-                        'options': ['Most Valuable Player', 'Minimum Viable Product', 'Maximum Value Product', 'Market Value Product'],
-                        'correct': 1
-                    }
-                ]
+                'steps': ['Reunir documentos', 'Completar formulario', 'Presentar en ventanilla', 'Obtener RUC'],
+                'required_documents': ['Cédula', 'Certificado de votación', 'Comprobante de domicilio'],
+                'deadline_hours': 168  # 1 semana
             },
-            'requirements': [],  # Always available
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 3,
+            'estimated_time': 120,
             'created_at': datetime.utcnow()
         },
         {
             'id': str(uuid.uuid4()),
-            'title': '💡 Misión 3: Ideación y Creatividad',
-            'description': 'Aprende técnicas para generar ideas innovadoras y creativas.',
+            'title': '📜 Contratos y Acuerdos Empresariales',
+            'description': 'Aprende a redactar y negociar contratos básicos para tu negocio.',
             'type': 'practical_task',
-            'points_reward': 20,
+            'competence_area': 'legal',
+            'points_reward': 75,
+            'coins_reward': 35,
             'position': 3,
-            'content': {'task': 'Genera 5 ideas de negocio para tu comunidad'},
-            'requirements': [],  # Always available
-            'created_at': datetime.utcnow()
-        },
-        {
-            'id': str(uuid.uuid4()),
-            'title': '📊 Misión 4: Análisis de Mercado',
-            'description': 'Comprende cómo investigar y analizar tu mercado objetivo.',
-            'type': 'downloadable_guide',
-            'points_reward': 25,
-            'position': 4,
-            'content': {'guide_url': 'https://example.com/market-analysis.pdf'},
-            'requirements': [],  # Sequential unlock after first mission
-            'created_at': datetime.utcnow()
-        },
-        {
-            'id': str(uuid.uuid4()),
-            'title': '💰 Misión 5: Modelo de Negocio',
-            'description': 'Diseña un modelo de negocio sólido y rentable.',
-            'type': 'expert_advice',
-            'points_reward': 30,
-            'position': 5,
-            'content': {'expert_tips': 'Consejos de expertos en modelos de negocio'},
-            'requirements': [],  # Sequential unlock
+            'content': {
+                'task': 'Redacta un contrato de servicios básico para tu emprendimiento',
+                'template_sections': ['Partes', 'Objeto', 'Obligaciones', 'Pagos', 'Resolución'],
+                'deadline_hours': 48
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 90,
             'created_at': datetime.utcnow()
         }
     ]
     
+    # VENTAS Competence Area
+    sales_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🎯 Identifica tu Cliente Ideal',
+            'description': 'Define y caracteriza a tu cliente objetivo para mejorar tus ventas.',
+            'type': 'practical_task',
+            'competence_area': 'ventas',
+            'points_reward': 60,
+            'coins_reward': 30,
+            'position': 4,
+            'content': {
+                'task': 'Crea el perfil completo de tu cliente ideal (buyer persona)',
+                'template_sections': ['Demografía', 'Comportamiento', 'Necesidades', 'Canales preferidos'],
+                'deadline_hours': 24
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 2,
+            'estimated_time': 60,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '💬 Técnicas de Venta Consultiva',
+            'description': 'Domina las técnicas modernas de venta basadas en consultoría.',
+            'type': 'expert_advice',
+            'competence_area': 'ventas',
+            'points_reward': 80,
+            'coins_reward': 40,
+            'position': 5,
+            'content': {
+                'expert_name': 'Carlos Mendoza',
+                'expert_title': 'Director de Ventas - TechCorp',
+                'key_points': [
+                    'Escucha activa y preguntas poderosas',
+                    'Identificación de dolor vs. necesidad',
+                    'Presentación de valor personalizada',
+                    'Manejo de objeciones',
+                    'Cierre natural'
+                ],
+                'video_url': 'https://youtube.com/watch?v=sales-techniques'
+            },
+            'evidence_required': False,
+            'auto_approve': True,
+            'difficulty_level': 3,
+            'estimated_time': 75,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📊 Simulador de Ventas Prácticas',
+            'description': 'Practica técnicas de venta en escenarios realistas.',
+            'type': 'pitch_simulator',
+            'competence_area': 'ventas',
+            'points_reward': 120,
+            'coins_reward': 60,
+            'position': 6,
+            'content': {
+                'scenarios': [
+                    'Cliente indeciso que necesita más información',
+                    'Cliente precio-sensible que busca descuentos',
+                    'Cliente técnico que requiere especificaciones',
+                    'Cliente ejecutivo con poco tiempo'
+                ],
+                'evaluation_criteria': ['Rapport', 'Identificación de necesidades', 'Presentación', 'Cierre']
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 90,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # PITCH Competence Area  
+    pitch_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🎤 Tu Primer Elevator Pitch',
+            'description': 'Crea un pitch de 60 segundos que capture la esencia de tu negocio.',
+            'type': 'microvideo',
+            'competence_area': 'pitch',
+            'points_reward': 100,
+            'coins_reward': 50,
+            'position': 7,
+            'content': {
+                'max_duration': 60,
+                'topics': ['Problema que resuelves', 'Tu solución única', 'Mercado objetivo', 'Call to action'],
+                'tips': [
+                    'Sé claro y conciso',
+                    'Cuenta una historia',
+                    'Practica hasta que fluya naturalmente',
+                    'Incluye números impactantes'
+                ]
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 3,
+            'estimated_time': 120,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📈 Pitch de Inversión Completo',
+            'description': 'Desarrolla una presentación completa para inversionistas.',
+            'type': 'practical_task',
+            'competence_area': 'pitch',
+            'points_reward': 200,
+            'coins_reward': 100,
+            'position': 8,
+            'content': {
+                'task': 'Crea una presentación de 10 slides para inversionistas',
+                'template_sections': [
+                    'Problema', 'Solución', 'Mercado', 'Modelo de negocio',
+                    'Tracción', 'Competencia', 'Equipo', 'Financieros', 'Inversión', 'Uso de fondos'
+                ],
+                'deadline_hours': 72
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 5,
+            'estimated_time': 180,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # OPERACIONES Competence Area
+    operations_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '⚙️ Procesos Operativos Básicos',
+            'description': 'Diseña los procesos clave de tu operación empresarial.',
+            'type': 'process_guide',
+            'competence_area': 'operaciones',
+            'points_reward': 90,
+            'coins_reward': 45,
+            'position': 9,
+            'content': {
+                'processes': ['Producción/Servicio', 'Control de calidad', 'Inventarios', 'Logística'],
+                'tools': ['Diagramas de flujo', 'Checklist', 'Indicadores', 'Mejora continua']
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 100,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📦 Gestión de Inventarios',
+            'description': 'Aprende a optimizar tu inventario y reducir costos.',
+            'type': 'practical_task',
+            'competence_area': 'operaciones',
+            'points_reward': 70,
+            'coins_reward': 35,
+            'position': 10,
+            'content': {
+                'task': 'Diseña un sistema de gestión de inventarios para tu negocio',
+                'template_sections': ['Categorización', 'Rotación', 'Punto de reorden', 'Proveedores'],
+                'deadline_hours': 48
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 3,
+            'estimated_time': 80,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # FINANZAS Competence Area
+    finance_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '💰 Fundamentos Financieros',
+            'description': 'Domina los conceptos financieros esenciales para emprendedores.',
+            'type': 'mini_quiz',
+            'competence_area': 'finanzas',
+            'points_reward': 80,
+            'coins_reward': 40,
+            'position': 11,
+            'content': {
+                'questions': [
+                    {
+                        'question': '¿Qué es el flujo de caja?',
+                        'options': [
+                            'El dinero total de la empresa',
+                            'La entrada y salida de efectivo en un período',
+                            'Las ganancias anuales',
+                            'El capital inicial'
+                        ],
+                        'correct': 1
+                    },
+                    {
+                        'question': '¿Cuál es la diferencia entre ingresos y utilidad?',
+                        'options': [
+                            'No hay diferencia',
+                            'Ingresos es dinero que entra, utilidad es lo que queda después de gastos',
+                            'Utilidad es dinero que entra, ingresos es lo que queda',
+                            'Ambos significan lo mismo'
+                        ],
+                        'correct': 1
+                    },
+                    {
+                        'question': '¿Qué es el punto de equilibrio?',
+                        'options': [
+                            'Cuando ganas mucho dinero',
+                            'Cuando no tienes gastos',
+                            'Cuando ingresos igualan a gastos totales',
+                            'Cuando tienes el doble de ingresos que gastos'
+                        ],
+                        'correct': 2
+                    },
+                    {
+                        'question': '¿Para qué sirve un presupuesto?',
+                        'options': [
+                            'Para planificar ingresos y gastos futuros',
+                            'Solo para empresas grandes',
+                            'Para calcular impuestos',
+                            'No es necesario en emprendimientos'
+                        ],
+                        'correct': 0
+                    }
+                ]
+            },
+            'evidence_required': False,
+            'auto_approve': True,
+            'difficulty_level': 2,
+            'estimated_time': 30,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📊 Plan Financiero Básico',
+            'description': 'Crea un plan financiero simple para tu emprendimiento.',
+            'type': 'business_plan',
+            'competence_area': 'finanzas',
+            'points_reward': 150,
+            'coins_reward': 75,
+            'position': 12,
+            'content': {
+                'sections': [
+                    'Proyección de ingresos (12 meses)',
+                    'Presupuesto de gastos operativos',
+                    'Inversión inicial requerida',
+                    'Punto de equilibrio',
+                    'Flujo de caja proyectado'
+                ],
+                'template_url': 'https://example.com/financial-template.xlsx',
+                'deadline_hours': 96
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 150,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # HABILIDADES BLANDAS Competence Area
+    soft_skills_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🧠 Liderazgo Emprendedor',
+            'description': 'Desarrolla las habilidades de liderazgo esenciales para emprendedores.',
+            'type': 'expert_advice',
+            'competence_area': 'habilidades_blandas',
+            'points_reward': 85,
+            'coins_reward': 42,
+            'position': 13,
+            'content': {
+                'expert_name': 'María González',
+                'expert_title': 'Coach Ejecutiva Certificada',
+                'key_points': [
+                    'Autoconocimiento y inteligencia emocional',
+                    'Comunicación efectiva y escucha activa',
+                    'Toma de decisiones bajo presión',
+                    'Motivación y gestión de equipos',
+                    'Adaptabilidad y resiliencia'
+                ],
+                'video_url': 'https://youtube.com/watch?v=leadership-skills'
+            },
+            'evidence_required': False,
+            'auto_approve': True,
+            'difficulty_level': 3,
+            'estimated_time': 60,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🤝 Networking Estratégico',
+            'description': 'Aprende a construir una red de contactos valiosa para tu negocio.',
+            'type': 'networking_task',
+            'competence_area': 'habilidades_blandas',
+            'points_reward': 100,
+            'coins_reward': 50,
+            'position': 14,
+            'content': {
+                'task': 'Conecta con 5 emprendedores o profesionales de tu industria',
+                'platforms': ['LinkedIn', 'Eventos presenciales', 'Grupos de WhatsApp', 'Cámaras de comercio'],
+                'objectives': [
+                    'Intercambiar experiencias',
+                    'Identificar oportunidades de colaboración',
+                    'Aprender de sus experiencias',
+                    'Construir relaciones a largo plazo'
+                ],
+                'deadline_hours': 168
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 3,
+            'estimated_time': 200,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # MARKETING Competence Area
+    marketing_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📱 Estrategia de Marketing Digital',
+            'description': 'Diseña una estrategia de marketing digital efectiva y económica.',
+            'type': 'practical_task',
+            'competence_area': 'marketing',
+            'points_reward': 110,
+            'coins_reward': 55,
+            'position': 15,
+            'content': {
+                'task': 'Crea un plan de marketing digital de 3 meses',
+                'template_sections': [
+                    'Análisis de audiencia target',
+                    'Objetivos SMART',
+                    'Canales digitales a usar',
+                    'Calendario de contenidos',
+                    'Presupuesto y métricas'
+                ],
+                'deadline_hours': 72
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 120,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📊 Investigación de Mercado DIY',
+            'description': 'Realiza una investigación de mercado básica con herramientas gratuitas.',
+            'type': 'market_research',
+            'competence_area': 'marketing',
+            'points_reward': 130,
+            'coins_reward': 65,
+            'position': 16,
+            'content': {
+                'research_areas': [
+                    'Tamaño y crecimiento del mercado',
+                    'Análisis de competencia directa e indirecta',
+                    'Comportamiento del consumidor',
+                    'Tendencias y oportunidades',
+                    'Pricing y posicionamiento'
+                ],
+                'tools': ['Google Trends', 'Encuestas online', 'Redes sociales', 'Estudios públicos'],
+                'deadline_hours': 120
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 180,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # INNOVACION Competence Area
+    innovation_missions = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '💡 Pensamiento Innovador',
+            'description': 'Desarrolla técnicas de pensamiento creativo e innovador.',
+            'type': 'practical_task',
+            'competence_area': 'innovacion',
+            'points_reward': 95,
+            'coins_reward': 47,
+            'position': 17,
+            'content': {
+                'task': 'Aplica 3 técnicas de innovación a tu emprendimiento',
+                'techniques': [
+                    'Design Thinking',
+                    'Brainstorming estructurado',
+                    'Método SCAMPER',
+                    'Mapas mentales',
+                    'Prototipado rápido'
+                ],
+                'deliverables': ['Problema redefinido', 'Ideas generadas', 'Solución prototipada'],
+                'deadline_hours': 48
+            },
+            'evidence_required': True,
+            'auto_approve': False,
+            'difficulty_level': 4,
+            'estimated_time': 100,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    # Combine all missions
+    demo_missions.extend(legal_missions)
+    demo_missions.extend(sales_missions)
+    demo_missions.extend(pitch_missions)
+    demo_missions.extend(operations_missions)
+    demo_missions.extend(finance_missions)
+    demo_missions.extend(soft_skills_missions)
+    demo_missions.extend(marketing_missions)
+    demo_missions.extend(innovation_missions)
+    
     await db.missions.insert_many(demo_missions)
-    print(f"Initialized {len(demo_missions)} demo missions")
+    print(f"Initialized {len(demo_missions)} comprehensive missions")
+    
+    # Initialize demo rewards
+    demo_rewards = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': '☕ Café Gratis en Startup Café',
+            'description': 'Disfruta de un café premium gratis en nuestro espacio de coworking.',
+            'reward_type': 'discount',
+            'value': '1 café gratis',
+            'coins_cost': 50,
+            'stock': 100,
+            'stock_consumed': 0,
+            'partner_company': 'Startup Café Guayaquil',
+            'terms_conditions': 'Válido de lunes a viernes. No acumulable.',
+            'image_url': 'https://example.com/coffee-reward.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📚 Masterclass de Marketing Digital',
+            'description': 'Acceso completo a masterclass exclusiva de marketing digital.',
+            'reward_type': 'training',
+            'value': 'Curso completo de 8 horas',
+            'coins_cost': 200,
+            'stock': 50,
+            'stock_consumed': 0,
+            'external_url': 'https://academy.emprendeguayaquil.com/marketing',
+            'partner_company': 'Academia Emprende',
+            'terms_conditions': 'Acceso por 6 meses. Incluye certificado.',
+            'image_url': 'https://example.com/marketing-course.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '👨‍💼 Sesión de Mentoría 1:1',
+            'description': '1 hora de mentoría personalizada con experto en negocios.',
+            'reward_type': 'mentorship',
+            'value': '1 hora de mentoría',
+            'coins_cost': 300,
+            'stock': 20,
+            'stock_consumed': 0,
+            'partner_company': 'Red de Mentores GYE',
+            'terms_conditions': 'Coordinar cita con 48h de anticipación.',
+            'image_url': 'https://example.com/mentorship.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🤝 Acceso a Evento de Networking',
+            'description': 'Entrada gratuita al próximo evento de networking empresarial.',
+            'reward_type': 'networking',
+            'value': 'Entrada + Networking dinner',
+            'coins_cost': 150,
+            'stock': 75,
+            'stock_consumed': 0,
+            'partner_company': 'Cámara de Comercio GYE',
+            'terms_conditions': 'Válido para próximos 3 eventos. Confirmar asistencia.',
+            'image_url': 'https://example.com/networking-event.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📜 Consultoría Legal Básica',
+            'description': 'Consulta legal de 1 hora sobre constitución de empresa.',
+            'reward_type': 'consultation',
+            'value': '1 hora consultoría legal',
+            'coins_cost': 400,
+            'stock': 15,
+            'stock_consumed': 0,
+            'partner_company': 'Estudio Jurídico Innovar',
+            'terms_conditions': 'Solo temas de constitución empresarial.',
+            'image_url': 'https://example.com/legal-consultation.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '💻 Acceso a Coworking por 1 Mes',
+            'description': 'Mes completo de acceso a espacio de coworking equipado.',
+            'reward_type': 'resources',
+            'value': '1 mes de coworking',
+            'coins_cost': 500,
+            'stock': 10,
+            'stock_consumed': 0,
+            'partner_company': 'Innovation Hub GYE',
+            'terms_conditions': 'Incluye internet, café y salas de reunión.',
+            'image_url': 'https://example.com/coworking.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '🏆 Premio en Efectivo - Emprendedor del Mes',
+            'description': 'Premio en efectivo de $500 para el emprendedor destacado.',
+            'reward_type': 'cash_prize',
+            'value': '$500 USD',
+            'coins_cost': 1000,
+            'stock': 1,
+            'stock_consumed': 0,
+            'partner_company': 'Impulsa Guayaquil',
+            'terms_conditions': 'Evaluación mensual. Solo un ganador por mes.',
+            'image_url': 'https://example.com/cash-prize.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': '📱 Kit de Marketing Digital',
+            'description': 'Herramientas digitales premium por 3 meses (Canva Pro, Hootsuite, etc.)',
+            'reward_type': 'resources',
+            'value': 'Suite de herramientas digitales',
+            'coins_cost': 250,
+            'stock': 30,
+            'stock_consumed': 0,
+            'partner_company': 'Digital Tools Alliance',
+            'terms_conditions': 'Acceso por 3 meses. Renovación a precio especial.',
+            'image_url': 'https://example.com/digital-tools.jpg',
+            'ciudad': 'Guayaquil',
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    await db.rewards.insert_many(demo_rewards)
+    print(f"Initialized {len(demo_rewards)} demo rewards")
+    
+    # Initialize demo badges
+    demo_badges = [
+        {
+            'id': str(uuid.uuid4()),
+            'title': 'Primer Paso',
+            'description': 'Completaste tu primera misión',
+            'icon': '🌟',
+            'category': 'achievement',
+            'rarity': 'common',
+            'condition': 'complete_first_mission',
+            'coins_reward': 10,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': 'Emprendedor Dedicado',
+            'description': 'Completaste 5 misiones',
+            'icon': '🚀',
+            'category': 'achievement',
+            'rarity': 'uncommon',
+            'condition': 'complete_5_missions',
+            'coins_reward': 25,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': 'Racha de Fuego',
+            'description': 'Mantuviste una racha de 7 días',
+            'icon': '🔥',
+            'category': 'streak',
+            'rarity': 'rare',
+            'condition': 'streak_7_days',
+            'coins_reward': 50,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': 'Experto Legal',
+            'description': 'Completaste todas las misiones del área legal',
+            'icon': '⚖️',
+            'category': 'skill',
+            'rarity': 'epic',
+            'condition': 'complete_legal_area',
+            'coins_reward': 100,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': 'Maestro de Ventas',
+            'description': 'Completaste todas las misiones del área de ventas',
+            'icon': '💰',
+            'category': 'skill',
+            'rarity': 'epic',
+            'condition': 'complete_sales_area',
+            'coins_reward': 100,
+            'created_at': datetime.utcnow()
+        },
+        {
+            'id': str(uuid.uuid4()),
+            'title': 'Networking Pro',
+            'description': 'Conectaste con más de 10 emprendedores',
+            'icon': '🤝',
+            'category': 'social',
+            'rarity': 'rare',
+            'condition': 'network_builder',
+            'coins_reward': 75,
+            'created_at': datetime.utcnow()
+        }
+    ]
+    
+    await db.badges.insert_many(demo_badges)
+    print(f"Initialized {len(demo_badges)} demo badges")
 
-# Initialize demo missions on startup
+# Initialize demo content on startup
 async def startup_event():
-    await initialize_demo_missions()
+    await initialize_demo_content()
 
 # Call startup event
-import asyncio
 asyncio.create_task(startup_event())
-async def check_achievement_eligibility(user: User, achievement: "Achievement") -> bool:
-    """Check if user is eligible for an achievement"""
-    if achievement.condition == "complete_1_mission":
-        return len(user.completed_missions) >= 1
-    elif achievement.condition == "complete_5_missions":
-        return len(user.completed_missions) >= 5
-    elif achievement.condition == "complete_10_missions":
-        return len(user.completed_missions) >= 10
-    elif achievement.condition == "earn_100_points":
-        return user.points >= 100
-    elif achievement.condition == "earn_500_points":
-        return user.points >= 500
-    elif achievement.condition == "earn_1000_points":
-        return user.points >= 1000
-    elif achievement.condition == "streak_3_days":
-        return user.current_streak >= 3
-    elif achievement.condition == "streak_7_days":
-        return user.current_streak >= 7
-    elif achievement.condition == "streak_30_days":
-        return user.current_streak >= 30
 
+# Eligibility Engine Functions
+async def evaluate_eligibility_rule(user: User, rule_condition: str) -> tuple[bool, float]:
+    """Evaluate a single eligibility rule for a user"""
+    try:
+        condition = json.loads(rule_condition)
+        return await evaluate_condition(user, condition)
+    except json.JSONDecodeError:
+        return False, 0.0
+
+async def evaluate_condition(user: User, condition: dict) -> tuple[bool, float]:
+    """Recursively evaluate conditions"""
+    if "and" in condition:
+        results = []
+        for sub_condition in condition["and"]:
+            result, score = await evaluate_condition(user, sub_condition)
+            results.append((result, score))
+        
+        # All conditions must be true
+        all_true = all(result for result, _ in results)
+        avg_score = sum(score for _, score in results) / len(results) if results else 0
+        return all_true, avg_score
+    
+    elif "or" in condition:
+        results = []
+        for sub_condition in condition["or"]:
+            result, score = await evaluate_condition(user, sub_condition)
+            results.append((result, score))
+        
+        # Any condition can be true
+        any_true = any(result for result, _ in results)
+        max_score = max(score for _, score in results) if results else 0
+        return any_true, max_score
+    
+    elif "missions" in condition:
+        required_missions = condition["missions"]
+        completed_count = len([m for m in required_missions if m in user.completed_missions])
+        score = completed_count / len(required_missions) if required_missions else 0
+        return score == 1.0, score
+    
+    elif "documents" in condition:
+        required_docs = condition["documents"]
+        user_docs = await db.documents.find({"user_id": user.id, "status": "approved"}).to_list(100)
+        approved_doc_types = [doc["document_type"] for doc in user_docs]
+        
+        approved_count = len([doc for doc in required_docs if doc in approved_doc_types])
+        score = approved_count / len(required_docs) if required_docs else 0
+        return score == 1.0, score
+    
+    elif "points" in condition:
+        points_req = condition["points"]
+        if "min" in points_req:
+            return user.points >= points_req["min"], min(1.0, user.points / points_req["min"])
+        return False, 0.0
+    
+    elif "xp" in condition:
+        xp_req = condition["xp"]
+        if "min" in xp_req:
+            return user.points >= xp_req["min"], min(1.0, user.points / xp_req["min"])
+        return False, 0.0
+    
+    elif "streak" in condition:
+        streak_req = condition["streak"]
+        if "min" in streak_req:
+            return user.current_streak >= streak_req["min"], min(1.0, user.current_streak / streak_req["min"])
+        return False, 0.0
+    
+    elif "competence_area" in condition:
+        area = condition["competence_area"]
+        min_missions = condition.get("min_missions", 1)
+        
+        # Count completed missions in this competence area
+        area_missions = await db.missions.find({"competence_area": area}).to_list(100)
+        completed_in_area = len([m for m in area_missions if m["id"] in user.completed_missions])
+        
+        score = min(1.0, completed_in_area / min_missions) if min_missions > 0 else 0
+        return completed_in_area >= min_missions, score
+    
+    return False, 0.0
+
+async def calculate_event_eligibility(user_id: str, event_id: str) -> EventEligibility:
+    """Calculate eligibility for a specific event"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_obj = User(**user)
+    
+    # Get event eligibility rules
+    rules = await db.eligibility_rules.find({"event_id": event_id}).to_list(100)
+    
+    if not rules:
+        # No rules defined, user is eligible
+        return EventEligibility(
+            event_id=event_id,
+            user_id=user_id,
+            status=EligibilityStatus.ELIGIBLE,
+            eligibility_percentage=100.0,
+            missing_requirements=[]
+        )
+    
+    total_score = 0.0
+    total_weight = 0.0
+    missing_requirements = []
+    
+    for rule in rules:
+        rule_obj = EligibilityRule(**rule)
+        is_met, score = await evaluate_eligibility_rule(user_obj, rule_obj.condition)
+        
+        weighted_score = score * rule_obj.weight
+        total_score += weighted_score
+        total_weight += rule_obj.weight
+        
+        if not is_met:
+            missing_requirements.append({
+                "rule_name": rule_obj.rule_name,
+                "description": rule_obj.description,
+                "completion_percentage": score * 100,
+                "condition": rule_obj.condition
+            })
+    
+    final_percentage = (total_score / total_weight * 100) if total_weight > 0 else 0
+    
+    # Determine status based on percentage
+    if final_percentage >= 100:
+        status = EligibilityStatus.ELIGIBLE
+    elif final_percentage >= 50:
+        status = EligibilityStatus.PARTIAL
+    else:
+        status = EligibilityStatus.NOT_ELIGIBLE
+    
+    return EventEligibility(
+        event_id=event_id,
+        user_id=user_id,
+        status=status,
+        eligibility_percentage=final_percentage,
+        missing_requirements=missing_requirements
+    )
+
+async def generate_qr_token(user_id: str, event_id: Optional[str] = None) -> QRToken:
+    """Generate QR token for user eligibility status"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Calculate eligibility if event specified
+    eligibility_status = EligibilityStatus.ELIGIBLE
+    if event_id:
+        eligibility = await calculate_event_eligibility(user_id, event_id)
+        eligibility_status = eligibility.status
+    
+    # Generate secure token
+    token = secrets.token_urlsafe(32)
+    
+    # Create QR token
+    qr_token = QRToken(
+        user_id=user_id,
+        event_id=event_id,
+        token=token,
+        status=eligibility_status,
+        user_info={
+            "name": f"{user['nombre']} {user['apellido']}",
+            "cedula": user['cedula'],
+            "emprendimiento": user['nombre_emprendimiento'],
+            "points": user['points'],
+            "rank": user['rank']
+        },
+        expires_at=datetime.utcnow() + timedelta(minutes=5)  # 5 minute expiry
+    )
+    
+    await db.qr_tokens.insert_one(qr_token.dict())
+    return qr_token
+
+async def generate_suggestions_for_event(user_id: str, event_id: str) -> List[Dict[str, Any]]:
+    """Generate smart suggestions for what user needs to be eligible for event"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        return []
+    
+    eligibility = await calculate_event_eligibility(user_id, event_id)
+    suggestions = []
+    
+    for missing in eligibility.missing_requirements:
+        try:
+            condition = json.loads(missing["condition"])
+            
+            if "missions" in condition:
+                required_missions = condition["missions"]
+                incomplete_missions = [m for m in required_missions if m not in user["completed_missions"]]
+                
+                for mission_id in incomplete_missions:
+                    mission = await db.missions.find_one({"id": mission_id})
+                    if mission:
+                        suggestions.append({
+                            "type": "mission",
+                            "id": mission_id,
+                            "title": mission["title"],
+                            "description": f"Completa esta misión para cumplir: {missing['rule_name']}",
+                            "competence_area": mission["competence_area"],
+                            "points_reward": mission["points_reward"],
+                            "estimated_time": mission["estimated_time"],
+                            "priority": "high" if missing["completion_percentage"] < 25 else "medium"
+                        })
+            
+            elif "documents" in condition:
+                required_docs = condition["documents"]
+                user_docs = await db.documents.find({"user_id": user_id, "status": "approved"}).to_list(100)
+                approved_doc_types = [doc["document_type"] for doc in user_docs]
+                
+                missing_docs = [doc for doc in required_docs if doc not in approved_doc_types]
+                
+                for doc_type in missing_docs:
+                    suggestions.append({
+                        "type": "document",
+                        "document_type": doc_type,
+                        "title": f"Sube tu {doc_type.replace('_', ' ').title()}",
+                        "description": f"Documento requerido para: {missing['rule_name']}",
+                        "priority": "high"
+                    })
+            
+            elif "points" in condition:
+                points_needed = condition["points"]["min"] - user["points"]
+                if points_needed > 0:
+                    suggestions.append({
+                        "type": "points",
+                        "points_needed": points_needed,
+                        "title": f"Gana {points_needed} puntos más",
+                        "description": f"Completa más misiones para obtener los puntos necesarios",
+                        "priority": "medium"
+                    })
+                    
+        except json.JSONDecodeError:
+            continue
+    
+    return suggestions
+
+# Enhanced utility functions
 async def calculate_user_level(points: int) -> tuple[UserLevel, int]:
     """Calculate user level based on points and return (level, points_in_level)"""
     levels = [
@@ -406,7 +1649,7 @@ async def calculate_user_level(points: int) -> tuple[UserLevel, int]:
     
     return current_level, level_points
 
-async def check_badge_eligibility(user: User, badge: "Badge") -> bool:
+async def check_badge_eligibility(user: User, badge: Badge) -> bool:
     """Check if user is eligible for a badge"""
     condition = badge.condition
     
@@ -440,38 +1683,25 @@ async def check_badge_eligibility(user: User, badge: "Badge") -> bool:
     elif condition == "earn_2500_points":
         return user.points >= 2500
     
-    # Milestone badges (levels)
-    elif condition == "reach_level_junior":
-        return user.rank in ["emprendedor_junior", "emprendedor_senior", "emprendedor_experto", "emprendedor_master"]
-    elif condition == "reach_level_senior":
-        return user.rank in ["emprendedor_senior", "emprendedor_experto", "emprendedor_master"]
-    elif condition == "reach_level_experto":
-        return user.rank in ["emprendedor_experto", "emprendedor_master"]
-    elif condition == "reach_level_master":
-        return user.rank == "emprendedor_master"
+    # Competence area badges
+    elif condition == "complete_legal_area":
+        legal_missions = await db.missions.find({"competence_area": "legal"}).to_list(100)
+        legal_mission_ids = [m["id"] for m in legal_missions]
+        completed_legal = len([m for m in legal_mission_ids if m in user.completed_missions])
+        return completed_legal == len(legal_mission_ids)
     
-    # Social badges (special conditions)
-    elif condition == "participate_in_events":
-        # Check if user has registered for events
-        event_registrations = await db.event_registrations.count_documents({"user_id": user.id})
-        return event_registrations > 0
+    elif condition == "complete_sales_area":
+        sales_missions = await db.missions.find({"competence_area": "ventas"}).to_list(100)
+        sales_mission_ids = [m["id"] for m in sales_missions]
+        completed_sales = len([m for m in sales_mission_ids if m in user.completed_missions])
+        return completed_sales == len(sales_mission_ids)
+    
+    # Social badges
     elif condition == "network_builder":
-        # Check if user has connected with other users (placeholder)
-        return user.points >= 750  # Temporary condition
-    
-    # Special badges (creative conditions)
-    elif condition == "creative_innovator":
-        # Check if user completed creative missions
-        return len(user.completed_missions) >= 15 and user.points >= 300
-    elif condition == "speed_champion":
-        # Check if user completed missions quickly (placeholder)
-        return len(user.completed_missions) >= 8 and user.current_streak >= 5
-    elif condition == "digital_transformer":
-        # Check if user engaged with digital tools
-        return user.points >= 600 and len(user.completed_missions) >= 12
-    elif condition == "social_impact":
-        # Check if user achieved significant impact
-        return user.points >= 1500 and len(user.completed_missions) >= 20
+        # Check networking missions completed
+        networking_missions = await db.missions.find({"type": "networking_task"}).to_list(100)
+        networking_completed = len([m for m in networking_missions if m["id"] in user.completed_missions])
+        return networking_completed >= 2
     
     return False
 
@@ -499,10 +1729,13 @@ async def award_badges_to_user(user: User):
             )
             await db.user_badges.insert_one(new_user_badge.dict())
             
-            # Update user's badge list
+            # Update user's badge list and award coins
             await db.users.update_one(
                 {"id": user.id},
-                {"$push": {"badges": badge.id}}
+                {
+                    "$push": {"badges": badge.id},
+                    "$inc": {"coins": badge.coins_reward}
+                }
             )
             
             badges_awarded.append(badge)
@@ -512,8 +1745,8 @@ async def award_badges_to_user(user: User):
                 user_id=user.id,
                 type=NotificationType.NEW_BADGE,
                 title=f"¡Nueva insignia desbloqueada!",
-                message=f"Has obtenido la insignia '{badge.title}' - {badge.description}",
-                data={"badge_id": badge.id, "badge_title": badge.title}
+                message=f"Has obtenido la insignia '{badge.title}' y ganado {badge.coins_reward} monedas!",
+                data={"badge_id": badge.id, "badge_title": badge.title, "coins_awarded": badge.coins_reward}
             )
             await db.notifications.insert_one(notification.dict())
     
@@ -550,7 +1783,6 @@ async def check_and_update_user_level(user: User):
         
         return True
     
-    return False
     return False
 
 async def update_user_streak(user_id: str):
@@ -591,17 +1823,6 @@ async def update_user_streak(user_id: str):
         }
     )
 
-async def create_notification(user_id: str, notification_type: NotificationType, title: str, message: str, data: Dict[str, Any] = {}):
-    """Create a notification for a user"""
-    notification = Notification(
-        user_id=user_id,
-        type=notification_type,
-        title=title,
-        message=message,
-        data=data
-    )
-    await db.notifications.insert_one(notification.dict())
-
 async def check_mission_cooldown(user_id: str, mission_id: str) -> bool:
     """Check if user can attempt a mission or is in cooldown"""
     user = await db.users.find_one({"id": user_id})
@@ -619,160 +1840,20 @@ async def check_mission_cooldown(user_id: str, mission_id: str) -> bool:
             return False
     
     return True
-    type: MissionType
-    points_reward: int
-    position: int
-    content: Dict[str, Any]
-    requirements: List[str]
-    status: MissionStatus
-    created_at: datetime
 
-class MissionCompletion(BaseModel):
-    mission_id: str
-    completion_data: Dict[str, Any] = {}
-
-class MissionAttempt(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    mission_id: str
-    status: MissionAttemptStatus
-    score: Optional[float] = None
-    answers: Dict[str, Any] = {}
-    attempt_date: datetime = Field(default_factory=datetime.utcnow)
-    can_retry_after: Optional[datetime] = None
-
-class Notification(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    type: NotificationType
-    title: str
-    message: str
-    data: Dict[str, Any] = {}
-    read: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class Badge(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    description: str
-    icon: str
-    category: BadgeCategory
-    rarity: BadgeRarity
-    condition: str
-    points_reward: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class UserBadge(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    badge_id: str
-    earned_at: datetime = Field(default_factory=datetime.utcnow)
-    progress: float = 1.0  # 1.0 means fully earned
-
-class UserSettings(BaseModel):
-    user_id: str
-    dark_mode: bool = False
-    notifications_enabled: bool = True
-    push_notifications: bool = True
-    email_notifications: bool = True
-    streak_warnings: bool = True
-    inactivity_warnings: bool = True
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-class UserStats(BaseModel):
-    user_id: str
-    total_points: int
-    total_missions_completed: int
-    total_missions_attempted: int
-    current_streak: int
-    best_streak: int
-    rank: UserRank
-    achievements_earned: int
-    favorite_rewards_count: int
-    completion_rate: float
-    last_activity: datetime
-
-class Achievement(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    description: str
-    icon: str
-    condition: str
-    points_required: int = 0
-    missions_required: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class Reward(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    description: str
-    type: str
-    value: str
-    points_cost: int
-    external_url: Optional[str] = None  # Nueva funcionalidad
-    available_until: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class RewardCreate(BaseModel):
-    title: str
-    description: str
-    type: str
-    value: str
-    points_cost: int
-    external_url: Optional[str] = None
-    available_until: Optional[datetime] = None
-
-class RewardUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    type: Optional[str] = None
-    value: Optional[str] = None
-    points_cost: Optional[int] = None
-    external_url: Optional[str] = None
-    available_until: Optional[datetime] = None
-
-class Event(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    description: str
-    location: str
-    date: datetime
-    organizer: str
-    capacity: Optional[int] = None
-    registered_users: List[str] = []
-    registration_url: Optional[str] = None  # Nueva funcionalidad
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class EventCreate(BaseModel):
-    title: str
-    description: str
-    location: str
-    date: datetime
-    organizer: str
-    capacity: Optional[int] = None
-    registration_url: Optional[str] = None
-
-class EventUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    location: Optional[str] = None
-    date: Optional[datetime] = None
-    organizer: Optional[str] = None
-    capacity: Optional[int] = None
-    registration_url: Optional[str] = None
-
-class AdminStats(BaseModel):
-    total_users: int
-    total_missions: int
-    total_completed_missions: int
-    total_points_awarded: int
-    active_users_last_week: int
-    most_popular_missions: List[Dict[str, Any]]
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Impulsa Guayaquil API - Empowering Entrepreneurs"}
+    return {"message": "Impulsa Guayaquil API - Empowering Entrepreneurs v2.0"}
 
 # Authentication routes
 @api_router.post("/register", response_model=UserResponse)
@@ -793,7 +1874,9 @@ async def register(user_data: UserCreate):
         cedula=user_data.cedula,
         email=user_data.email,
         nombre_emprendimiento=user_data.nombre_emprendimiento,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        ciudad=user_data.ciudad,
+        cohorte=user_data.cohorte
     )
     
     await db.users.insert_one(user.dict())
@@ -815,6 +1898,12 @@ async def login(user_credentials: UserLogin):
         data={"sub": user["id"]}, expires_delta=access_token_expires
     )
     
+    # Update last activity
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_activity": datetime.utcnow()}}
+    )
+    
     user_response = UserResponse(**user)
     
     return Token(
@@ -827,17 +1916,27 @@ async def login(user_credentials: UserLogin):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return UserResponse(**current_user.dict())
 
-# User routes
+# Enhanced User routes
 @api_router.get("/users", response_model=List[UserResponse])
-async def get_users(current_user: User = Depends(get_admin_user)):
-    users = await db.users.find().to_list(100)
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    ciudad: Optional[str] = None,
+    cohorte: Optional[str] = None,
+    current_user: User = Depends(get_admin_user)
+):
+    query = {}
+    if ciudad:
+        query["ciudad"] = ciudad
+    if cohorte:
+        query["cohorte"] = cohorte
+    
+    users = await db.users.find(query).skip(skip).limit(limit).to_list(limit)
     result = []
     for user in users:
-        # Skip the _id field
         if '_id' in user:
             del user['_id']
         
-        # Skip users that don't have the required fields
         if not all(field in user for field in ['nombre', 'apellido', 'cedula', 'email', 'nombre_emprendimiento', 'role']):
             continue
             
@@ -847,7 +1946,7 @@ async def get_users(current_user: User = Depends(get_admin_user)):
 @api_router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: User = Depends(get_current_user)):
     # Users can only see their own profile, unless they're admin
-    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     
     user = await db.users.find_one({"id": user_id})
@@ -885,1982 +1984,7 @@ async def delete_user(user_id: str, current_user: User = Depends(get_admin_user)
     # Clean up user data
     await db.notifications.delete_many({"user_id": user_id})
     await db.mission_attempts.delete_many({"user_id": user_id})
+    await db.documents.delete_many({"user_id": user_id})
+    await db.evidences.delete_many({"user_id": user_id})
     
     return {"message": "User deleted successfully"}
-
-@api_router.put("/users/{user_id}/profile-picture")
-async def update_profile_picture(user_id: str, profile_data: dict, current_user: User = Depends(get_current_user)):
-    # Users can only update their own profile picture, unless they're admin
-    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    profile_picture = profile_data.get("profile_picture")
-    if not profile_picture:
-        raise HTTPException(status_code=400, detail="Profile picture is required")
-    
-    # Update user profile picture
-    await db.users.update_one(
-        {"id": user_id},
-        {
-            "$set": {
-                "profile_picture": profile_picture,
-                "updated_at": datetime.utcnow()
-            }
-        }
-    )
-    
-    # Return updated user
-    updated_user = await db.users.find_one({"id": user_id})
-    return UserResponse(**updated_user)
-
-@api_router.post("/users/{user_id}/favorite-reward")
-async def toggle_favorite_reward(user_id: str, reward_data: dict, current_user: User = Depends(get_current_user)):
-    """Toggle favorite reward for user"""
-    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    reward_id = reward_data.get("reward_id")
-    if not reward_id:
-        raise HTTPException(status_code=400, detail="Reward ID is required")
-    
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    favorites = user.get("favorite_rewards", [])
-    
-    if reward_id in favorites:
-        # Remove from favorites
-        favorites.remove(reward_id)
-        action = "removed"
-    else:
-        # Add to favorites
-        favorites.append(reward_id)
-        action = "added"
-    
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"favorite_rewards": favorites, "updated_at": datetime.utcnow()}}
-    )
-    
-    return {"message": f"Reward {action} to/from favorites", "favorites": favorites}
-
-@api_router.get("/users/{user_id}/stats", response_model=UserStats)
-async def get_user_stats(user_id: str, current_user: User = Depends(get_current_user)):
-    """Get user statistics"""
-    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Get achievements count
-    achievements = await db.achievements.find().to_list(100)
-    earned_achievements = 0
-    for achievement in achievements:
-        if await check_achievement_eligibility(User(**user), Achievement(**achievement)):
-            earned_achievements += 1
-    
-    completion_rate = 0
-    if user.get("total_missions_attempted", 0) > 0:
-        completion_rate = (user.get("total_missions_completed", 0) / user.get("total_missions_attempted", 0)) * 100
-    
-    return UserStats(
-        user_id=user_id,
-        total_points=user.get("points", 0),
-        total_missions_completed=user.get("total_missions_completed", 0),
-        total_missions_attempted=user.get("total_missions_attempted", 0),
-        current_streak=user.get("current_streak", 0),
-        best_streak=user.get("best_streak", 0),
-        rank=user.get("rank", UserRank.EMPRENDEDOR_NOVATO),
-        achievements_earned=earned_achievements,
-        favorite_rewards_count=len(user.get("favorite_rewards", [])),
-        completion_rate=completion_rate,
-        last_activity=user.get("updated_at", user.get("created_at"))
-    )
-
-# Mission routes
-@api_router.post("/missions", response_model=Mission)
-async def create_mission(mission_data: MissionCreate, current_user: User = Depends(get_admin_user)):
-    mission = Mission(**mission_data.dict(), created_by=current_user.id)
-    await db.missions.insert_one(mission.dict())
-    return mission
-
-@api_router.get("/missions", response_model=List[Mission])
-async def get_missions():
-    missions = await db.missions.find().sort("position", 1).to_list(100)
-    return [Mission(**mission) for mission in missions]
-
-@api_router.put("/missions/{mission_id}", response_model=Mission)
-async def update_mission(mission_id: str, mission_data: MissionUpdate, current_user: User = Depends(get_admin_user)):
-    mission = await db.missions.find_one({"id": mission_id})
-    if not mission:
-        raise HTTPException(status_code=404, detail="Mission not found")
-    
-    update_data = {k: v for k, v in mission_data.dict().items() if v is not None}
-    if update_data:
-        await db.missions.update_one({"id": mission_id}, {"$set": update_data})
-    
-    updated_mission = await db.missions.find_one({"id": mission_id})
-    return Mission(**updated_mission)
-
-@api_router.delete("/missions/{mission_id}")
-async def delete_mission(mission_id: str, current_user: User = Depends(get_admin_user)):
-    result = await db.missions.delete_one({"id": mission_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Mission not found")
-    return {"message": "Mission deleted successfully"}
-
-@api_router.get("/missions/{user_id}/with-status", response_model=List[MissionWithStatus])
-async def get_missions_with_status(user_id: str, current_user: User = Depends(get_current_user)):
-    # Users can only see their own missions, unless they're admin
-    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    missions = await db.missions.find().sort("position", 1).to_list(100)
-    completed_missions = user.get("completed_missions", [])
-    
-    missions_with_status = []
-    for mission in missions:
-        mission_obj = Mission(**mission)
-        
-        # Determine status
-        if mission_obj.id in completed_missions:
-            status = MissionStatus.COMPLETED
-        else:
-            # New intelligent logic: Mission is available if:
-            # 1. It has no requirements (always available)
-            # 2. All its requirements are met
-            # 3. OR if it's one of the first 3 missions (to prevent all missions being locked)
-            
-            if not mission_obj.requirements:
-                # No requirements - always available
-                status = MissionStatus.AVAILABLE
-            elif mission_obj.position <= 3:
-                # First 3 missions are always available to prevent total lockout
-                status = MissionStatus.AVAILABLE
-            else:
-                # Check if requirements are met
-                requirements_met = all(req_id in completed_missions for req_id in mission_obj.requirements)
-                if requirements_met:
-                    status = MissionStatus.AVAILABLE
-                else:
-                    status = MissionStatus.LOCKED
-        
-        missions_with_status.append(MissionWithStatus(
-            id=mission_obj.id,
-            title=mission_obj.title,
-            description=mission_obj.description,
-            type=mission_obj.type,
-            points_reward=mission_obj.points_reward,
-            position=mission_obj.position,
-            content=mission_obj.content,
-            requirements=mission_obj.requirements,
-            status=status,
-            created_at=mission_obj.created_at
-        ))
-    
-    return missions_with_status
-
-# Badge routes
-@api_router.get("/badges", response_model=List[Badge])
-async def get_all_badges():
-    badges = await db.badges.find().to_list(100)
-    return [Badge(**badge) for badge in badges]
-
-@api_router.get("/badges/user/{user_id}", response_model=List[dict])
-async def get_user_badges(user_id: str, current_user: User = Depends(get_current_user)):
-    # Users can only see their own badges, unless they're admin
-    if current_user.role != UserRole.ADMIN and current_user.id != user_id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    
-    # Get user's badges with badge details
-    user_badges = await db.user_badges.find({"user_id": user_id}).to_list(100)
-    
-    result = []
-    for user_badge in user_badges:
-        badge = await db.badges.find_one({"id": user_badge["badge_id"]})
-        if badge:
-            result.append({
-                "badge": Badge(**badge),
-                "earned_at": user_badge["earned_at"],
-                "progress": user_badge["progress"]
-            })
-    
-    return result
-
-@api_router.post("/badges", response_model=Badge)
-async def create_badge(badge: Badge, current_user: User = Depends(get_admin_user)):
-    await db.badges.insert_one(badge.dict())
-    return badge
-
-@api_router.put("/badges/{badge_id}", response_model=Badge)
-async def update_badge(badge_id: str, badge_update: Badge, current_user: User = Depends(get_admin_user)):
-    badge_update.id = badge_id
-    result = await db.badges.update_one(
-        {"id": badge_id},
-        {"$set": badge_update.dict()}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Badge not found")
-    
-    updated_badge = await db.badges.find_one({"id": badge_id})
-    return Badge(**updated_badge)
-
-@api_router.delete("/badges/{badge_id}")
-async def delete_badge(badge_id: str, current_user: User = Depends(get_admin_user)):
-    result = await db.badges.delete_one({"id": badge_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Badge not found")
-    return {"message": "Badge deleted successfully"}
-
-# User Settings routes
-@api_router.get("/settings", response_model=UserSettings)
-async def get_user_settings(current_user: User = Depends(get_current_user)):
-    settings = await db.user_settings.find_one({"user_id": current_user.id})
-    if not settings:
-        # Create default settings
-        default_settings = UserSettings(user_id=current_user.id)
-        await db.user_settings.insert_one(default_settings.dict())
-        return default_settings
-    return UserSettings(**settings)
-
-@api_router.put("/settings", response_model=UserSettings)
-async def update_user_settings(settings_update: UserSettings, current_user: User = Depends(get_current_user)):
-    settings_update.user_id = current_user.id
-    settings_update.updated_at = datetime.utcnow()
-    
-    result = await db.user_settings.update_one(
-        {"user_id": current_user.id},
-        {"$set": settings_update.dict()},
-        upsert=True
-    )
-    
-    updated_settings = await db.user_settings.find_one({"user_id": current_user.id})
-    return UserSettings(**updated_settings)
-
-# Level and progress routes
-@api_router.get("/user/level")
-async def get_user_level_info(current_user: User = Depends(get_current_user)):
-    user = await db.users.find_one({"id": current_user.id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    current_level, level_points = await calculate_user_level(user["points"])
-    
-    # Calculate next level requirements
-    levels = [
-        (UserLevel.NOVATO, 0),
-        (UserLevel.PRINCIPIANTE, 100),
-        (UserLevel.INTERMEDIO, 300),
-        (UserLevel.AVANZADO, 600),
-        (UserLevel.EXPERTO, 1000),
-        (UserLevel.MAESTRO, 1500),
-        (UserLevel.LEYENDA, 2500)
-    ]
-    
-    next_level = None
-    points_to_next = None
-    
-    for i, (level, threshold) in enumerate(levels):
-        if level == current_level and i < len(levels) - 1:
-            next_level = levels[i + 1][0]
-            points_to_next = levels[i + 1][1] - user["points"]
-            break
-    
-    return {
-        "current_level": current_level,
-        "level_points": level_points,
-        "total_points": user["points"],
-        "next_level": next_level,
-        "points_to_next": points_to_next,
-        "progress_percentage": (level_points / (points_to_next + level_points)) * 100 if points_to_next else 100
-    }
-
-# Notification management with enhanced types
-@api_router.post("/notifications/push-subscription")
-async def save_push_subscription(subscription_data: dict, current_user: User = Depends(get_current_user)):
-    """Save push notification subscription for user"""
-    # Update user with push subscription info
-    await db.users.update_one(
-        {"id": current_user.id},
-        {"$set": {"push_subscription": subscription_data, "updated_at": datetime.utcnow()}}
-    )
-    return {"message": "Push subscription saved successfully"}
-
-@api_router.post("/notifications/send-test")
-async def send_test_notification(current_user: User = Depends(get_current_user)):
-    """Send test notification to user"""
-    notification = Notification(
-        user_id=current_user.id,
-        type=NotificationType.MISSION_RECOMMENDATION,
-        title="¡Notificación de prueba!",
-        message="Esta es una notificación de prueba para verificar que el sistema funciona correctamente.",
-        data={"test": True}
-    )
-    await db.notifications.insert_one(notification.dict())
-    return {"message": "Test notification sent"}
-
-# Mission recommendation system
-@api_router.get("/missions/recommendations")
-async def get_mission_recommendations(current_user: User = Depends(get_current_user)):
-    """Get personalized mission recommendations for user"""
-    user = await db.users.find_one({"id": current_user.id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Get available missions
-    missions = await db.missions.find().sort("position", 1).to_list(100)
-    completed_missions = user.get("completed_missions", [])
-    
-    recommendations = []
-    for mission in missions:
-        mission_obj = Mission(**mission)
-        
-        # Skip completed missions
-        if mission_obj.id in completed_missions:
-            continue
-        
-        # Check if requirements are met
-        requirements_met = all(req_id in completed_missions for req_id in mission_obj.requirements)
-        if requirements_met:
-            # Calculate recommendation score based on user profile
-            score = 0
-            
-            # Prefer missions with higher points
-            score += mission_obj.points_reward * 0.1
-            
-            # Prefer missions suitable for user's level
-            if mission_obj.points_reward <= user["points"] * 0.5:
-                score += 10
-            
-            # Prefer certain types based on user's history
-            if len(completed_missions) < 3:
-                if mission_obj.type in [MissionType.MICROVIDEO, MissionType.MINI_QUIZ]:
-                    score += 15
-            
-            recommendations.append({
-                "mission": mission_obj,
-                "score": score,
-                "reason": f"Recomendada para tu nivel {user.get('level', 'novato')}"
-            })
-    
-    # Sort by score and return top 3
-    recommendations.sort(key=lambda x: x["score"], reverse=True)
-    return recommendations[:3]
-
-@api_router.post("/missions/complete")
-async def complete_mission(completion: MissionCompletion, current_user: User = Depends(get_current_user)):
-    user = await db.users.find_one({"id": current_user.id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    mission = await db.missions.find_one({"id": completion.mission_id})
-    if not mission:
-        raise HTTPException(status_code=404, detail="Mission not found")
-    
-    # Check if already completed
-    if completion.mission_id in user.get("completed_missions", []):
-        raise HTTPException(status_code=400, detail="Mission already completed")
-    
-    # Check cooldown for mini-quiz missions
-    if mission["type"] == "mini_quiz":
-        if not await check_mission_cooldown(current_user.id, completion.mission_id):
-            failed_missions = user.get("failed_missions", {})
-            failed_date = failed_missions[completion.mission_id]
-            if isinstance(failed_date, str):
-                failed_date = datetime.fromisoformat(failed_date)
-            
-            retry_date = failed_date + timedelta(days=7)
-            remaining_days = (retry_date - datetime.utcnow()).days
-            
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Mission failed recently. You can retry in {remaining_days} days."
-            )
-    
-    # Validate mission completion for mini-quiz
-    success = True
-    score = 100.0
-    
-    if mission["type"] == "mini_quiz":
-        completion_data = completion.completion_data
-        user_answers = completion_data.get("quiz_answers", {})
-        questions = mission.get("content", {}).get("questions", [])
-        
-        if not questions:
-            raise HTTPException(status_code=400, detail="Quiz has no questions")
-        
-        correct_answers = 0
-        total_questions = len(questions)
-        
-        for i, question in enumerate(questions):
-            user_answer = user_answers.get(str(i))
-            correct_answer = question.get("correct_answer")
-            
-            if user_answer is not None and user_answer == correct_answer:
-                correct_answers += 1
-        
-        score = (correct_answers / total_questions) * 100
-        success = score >= 70  # 70% minimum to pass
-    
-    # Record mission attempt
-    attempt = MissionAttempt(
-        user_id=current_user.id,
-        mission_id=completion.mission_id,
-        status=MissionAttemptStatus.SUCCESS if success else MissionAttemptStatus.FAILED,
-        score=score,
-        answers=completion.completion_data.get("quiz_answers", {}),
-        can_retry_after=datetime.utcnow() + timedelta(days=7) if not success and mission["type"] == "mini_quiz" else None
-    )
-    
-    await db.mission_attempts.insert_one(attempt.dict())
-    
-    # Update user stats
-    await db.users.update_one(
-        {"id": current_user.id},
-        {"$inc": {"total_missions_attempted": 1}}
-    )
-    
-    if success:
-        # Mission completed successfully
-        new_points = user.get("points", 0) + mission["points_reward"]
-        new_completed_missions = user.get("completed_missions", []) + [completion.mission_id]
-        
-        # Update rank based on points
-        rank = UserRank.EMPRENDEDOR_NOVATO
-        if new_points >= 1000:
-            rank = UserRank.EMPRENDEDOR_MASTER
-        elif new_points >= 500:
-            rank = UserRank.EMPRENDEDOR_EXPERTO
-        elif new_points >= 250:
-            rank = UserRank.EMPRENDEDOR_SENIOR
-        elif new_points >= 100:
-            rank = UserRank.EMPRENDEDOR_JUNIOR
-        
-        # Check for rank up
-        old_rank = user.get("rank", UserRank.EMPRENDEDOR_NOVATO)
-        rank_up = rank != old_rank
-        
-        await db.users.update_one(
-            {"id": current_user.id},
-            {
-                "$set": {
-                    "points": new_points,
-                    "rank": rank,
-                    "completed_missions": new_completed_missions,
-                    "updated_at": datetime.utcnow()
-                },
-                "$inc": {"total_missions_completed": 1}
-            }
-        )
-        
-        # Update user streak
-        await update_user_streak(current_user.id)
-        
-        # Create notifications
-        if rank_up:
-            await create_notification(
-                current_user.id,
-                NotificationType.RANK_UP,
-                "¡Nuevo Rango!",
-                f"¡Felicitaciones! Has alcanzado el rango {rank.replace('_', ' ').title()}",
-                {"new_rank": rank, "old_rank": old_rank}
-            )
-        
-        # Check for new achievements
-        achievements = await db.achievements.find().to_list(100)
-        updated_user = await db.users.find_one({"id": current_user.id})
-        
-        for achievement in achievements:
-            if await check_achievement_eligibility(User(**updated_user), Achievement(**achievement)):
-                await create_notification(
-                    current_user.id,
-                    NotificationType.NEW_ACHIEVEMENT,
-                    "¡Nuevo Logro Desbloqueado!",
-                    f"Has desbloqueado: {achievement['title']}",
-                    {"achievement_id": achievement["id"]}
-                )
-        
-        return {
-            "message": "Mission completed successfully", 
-            "points_earned": mission["points_reward"],
-            "total_points": new_points,
-            "new_rank": rank,
-            "rank_up": rank_up,
-            "score": score
-        }
-    else:
-        # Mission failed
-        failed_missions = user.get("failed_missions", {})
-        failed_missions[completion.mission_id] = datetime.utcnow()
-        
-        await db.users.update_one(
-            {"id": current_user.id},
-            {
-                "$set": {
-                    "failed_missions": failed_missions,
-                    "updated_at": datetime.utcnow()
-                }
-            }
-        )
-        
-        return {
-            "message": "Mission failed. You can retry in 7 days.",
-            "points_earned": 0,
-            "score": score,
-            "retry_after": datetime.utcnow() + timedelta(days=7)
-        }
-
-# Achievement routes
-@api_router.post("/achievements", response_model=Achievement)
-async def create_achievement(achievement: Achievement, current_user: User = Depends(get_admin_user)):
-    await db.achievements.insert_one(achievement.dict())
-    return achievement
-
-@api_router.get("/achievements", response_model=List[Achievement])
-async def get_achievements():
-    achievements = await db.achievements.find().to_list(100)
-    return [Achievement(**achievement) for achievement in achievements]
-
-@api_router.get("/achievements/eligible", response_model=List[Achievement])
-async def get_eligible_achievements(current_user: User = Depends(get_current_user)):
-    """Get achievements that user is eligible for"""
-    user = await db.users.find_one({"id": current_user.id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    achievements = await db.achievements.find().to_list(100)
-    eligible_achievements = []
-    
-    for achievement in achievements:
-        if await check_achievement_eligibility(User(**user), Achievement(**achievement)):
-            eligible_achievements.append(Achievement(**achievement))
-    
-    return eligible_achievements
-
-@api_router.put("/achievements/{achievement_id}", response_model=Achievement)
-async def update_achievement(achievement_id: str, achievement_data: dict, current_user: User = Depends(get_admin_user)):
-    achievement = await db.achievements.find_one({"id": achievement_id})
-    if not achievement:
-        raise HTTPException(status_code=404, detail="Achievement not found")
-    
-    # Remove None values
-    update_data = {k: v for k, v in achievement_data.items() if v is not None}
-    if update_data:
-        await db.achievements.update_one({"id": achievement_id}, {"$set": update_data})
-    
-    updated_achievement = await db.achievements.find_one({"id": achievement_id})
-    return Achievement(**updated_achievement)
-
-@api_router.delete("/achievements/{achievement_id}")
-async def delete_achievement(achievement_id: str, current_user: User = Depends(get_admin_user)):
-    result = await db.achievements.delete_one({"id": achievement_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Achievement not found")
-    return {"message": "Achievement deleted successfully"}
-
-# Reward routes
-@api_router.post("/rewards", response_model=Reward)
-async def create_reward(reward: RewardCreate, current_user: User = Depends(get_admin_user)):
-    new_reward = Reward(**reward.dict())
-    await db.rewards.insert_one(new_reward.dict())
-    return new_reward
-
-@api_router.get("/rewards", response_model=List[Reward])
-async def get_rewards():
-    rewards = await db.rewards.find().to_list(100)
-    return [Reward(**reward) for reward in rewards]
-
-@api_router.put("/rewards/{reward_id}", response_model=Reward)
-async def update_reward(reward_id: str, reward_data: RewardUpdate, current_user: User = Depends(get_admin_user)):
-    reward = await db.rewards.find_one({"id": reward_id})
-    if not reward:
-        raise HTTPException(status_code=404, detail="Reward not found")
-    
-    # Remove None values
-    update_data = {k: v for k, v in reward_data.dict().items() if v is not None}
-    if update_data:
-        await db.rewards.update_one({"id": reward_id}, {"$set": update_data})
-    
-    updated_reward = await db.rewards.find_one({"id": reward_id})
-    return Reward(**updated_reward)
-
-@api_router.delete("/rewards/{reward_id}")
-async def delete_reward(reward_id: str, current_user: User = Depends(get_admin_user)):
-    result = await db.rewards.delete_one({"id": reward_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Reward not found")
-    return {"message": "Reward deleted successfully"}
-
-# Event routes
-@api_router.post("/events", response_model=Event)
-async def create_event(event: EventCreate, current_user: User = Depends(get_admin_user)):
-    new_event = Event(**event.dict())
-    await db.events.insert_one(new_event.dict())
-    return new_event
-
-@api_router.get("/events", response_model=List[Event])
-async def get_events():
-    events = await db.events.find().sort("date", 1).to_list(100)
-    return [Event(**event) for event in events]
-
-@api_router.put("/events/{event_id}", response_model=Event)
-async def update_event(event_id: str, event_data: EventUpdate, current_user: User = Depends(get_admin_user)):
-    event = await db.events.find_one({"id": event_id})
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    
-    # Remove None values
-    update_data = {k: v for k, v in event_data.dict().items() if v is not None}
-    if update_data:
-        await db.events.update_one({"id": event_id}, {"$set": update_data})
-    
-    updated_event = await db.events.find_one({"id": event_id})
-    return Event(**updated_event)
-
-@api_router.delete("/events/{event_id}")
-async def delete_event(event_id: str, current_user: User = Depends(get_admin_user)):
-    result = await db.events.delete_one({"id": event_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Event not found")
-    return {"message": "Event deleted successfully"}
-
-# Notification routes
-@api_router.get("/notifications", response_model=List[Notification])
-async def get_notifications(current_user: User = Depends(get_current_user)):
-    notifications = await db.notifications.find({"user_id": current_user.id}).sort("created_at", -1).to_list(50)
-    return [Notification(**notification) for notification in notifications]
-
-@api_router.put("/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
-    notification = await db.notifications.find_one({"id": notification_id, "user_id": current_user.id})
-    if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    
-    await db.notifications.update_one(
-        {"id": notification_id},
-        {"$set": {"read": True}}
-    )
-    
-    return {"message": "Notification marked as read"}
-
-@api_router.delete("/notifications/{notification_id}")
-async def delete_notification(notification_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.notifications.delete_one({"id": notification_id, "user_id": current_user.id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    return {"message": "Notification deleted successfully"}
-
-# Mission attempt routes
-@api_router.get("/missions/{mission_id}/attempts", response_model=List[MissionAttempt])
-async def get_mission_attempts(mission_id: str, current_user: User = Depends(get_current_user)):
-    attempts = await db.mission_attempts.find({"user_id": current_user.id, "mission_id": mission_id}).sort("attempt_date", -1).to_list(10)
-    return [MissionAttempt(**attempt) for attempt in attempts]
-
-@api_router.get("/missions/{mission_id}/cooldown")
-async def check_mission_cooldown_status(mission_id: str, current_user: User = Depends(get_current_user)):
-    can_attempt = await check_mission_cooldown(current_user.id, mission_id)
-    
-    if can_attempt:
-        return {"can_attempt": True, "message": "Mission available"}
-    else:
-        user = await db.users.find_one({"id": current_user.id})
-        failed_missions = user.get("failed_missions", {})
-        failed_date = failed_missions[mission_id]
-        if isinstance(failed_date, str):
-            failed_date = datetime.fromisoformat(failed_date)
-        
-        retry_date = failed_date + timedelta(days=7)
-        remaining_hours = (retry_date - datetime.utcnow()).total_seconds() / 3600
-        
-        return {
-            "can_attempt": False,
-            "message": f"Mission in cooldown. Retry in {int(remaining_hours)} hours.",
-            "retry_after": retry_date
-        }
-
-# Ranking routes
-@api_router.get("/leaderboard")
-async def get_leaderboard(limit: int = 10, current_user: User = Depends(get_current_user)):
-    """Get user leaderboard"""
-    users = await db.users.find({"role": "emprendedor"}).sort("points", -1).limit(limit).to_list(limit)
-    
-    leaderboard = []
-    for i, user in enumerate(users):
-        leaderboard.append({
-            "rank": i + 1,
-            "name": f"{user.get('nombre', '')} {user.get('apellido', '')}",
-            "points": user.get("points", 0),
-            "rank_title": user.get("rank", UserRank.EMPRENDEDOR_NOVATO),
-            "current_streak": user.get("current_streak", 0),
-            "completed_missions": len(user.get("completed_missions", [])),
-            "is_current_user": user.get("id") == current_user.id
-        })
-    
-    return {"leaderboard": leaderboard}
-
-# Admin routes
-@api_router.get("/admin/stats", response_model=AdminStats)
-async def get_admin_stats(current_user: User = Depends(get_admin_user)):
-    # Calculate stats
-    total_users = await db.users.count_documents({})
-    total_missions = await db.missions.count_documents({})
-    
-    # Get all users to calculate completed missions and points
-    users = await db.users.find().to_list(1000)
-    total_completed_missions = sum(len(user.get("completed_missions", [])) for user in users)
-    total_points_awarded = sum(user.get("points", 0) for user in users)
-    
-    # Active users last week (users with recent activity)
-    week_ago = datetime.utcnow() - timedelta(days=7)
-    active_users_last_week = await db.users.count_documents({"updated_at": {"$gte": week_ago}})
-    
-    # Most popular missions (by completion count)
-    missions = await db.missions.find().to_list(1000)
-    mission_completions = {}
-    
-    for user in users:
-        for mission_id in user.get("completed_missions", []):
-            mission_completions[mission_id] = mission_completions.get(mission_id, 0) + 1
-    
-    # Sort missions by completion count
-    sorted_missions = sorted(missions, key=lambda m: mission_completions.get(m["id"], 0), reverse=True)[:5]
-    
-    most_popular_missions = [
-        {
-            "id": mission["id"],
-            "title": mission["title"],
-            "completions": mission_completions.get(mission["id"], 0)
-        }
-        for mission in sorted_missions
-    ]
-    
-    return AdminStats(
-        total_users=total_users,
-        total_missions=total_missions,
-        total_completed_missions=total_completed_missions,
-        total_points_awarded=total_points_awarded,
-        active_users_last_week=active_users_last_week,
-        most_popular_missions=most_popular_missions
-    )
-
-# Initialize sample data
-@api_router.post("/initialize-data")
-async def initialize_sample_data():
-    # Create admin user if it doesn't exist
-    admin_user = await db.users.find_one({"cedula": "0000000000"})
-    if not admin_user:
-        admin = User(
-            nombre="Admin",
-            apellido="Sistema",
-            cedula="0000000000",
-            email="admin@impulsa.guayaquil.ec",
-            nombre_emprendimiento="Sistema Impulsa Guayaquil",
-            hashed_password=get_password_hash("admin"),
-            role=UserRole.ADMIN,
-            points=9999,
-            rank=UserRank.EMPRENDEDOR_MASTER
-        )
-        await db.users.insert_one(admin.dict())
-    
-    # Clear existing data
-    await db.missions.delete_many({})
-    await db.achievements.delete_many({})
-    await db.rewards.delete_many({})
-    await db.events.delete_many({})
-    
-    # Create comprehensive sample missions
-    sample_missions = [
-        # Beginner Level Missions (1-10)
-        {
-            "title": "🎬 Microvideo: Tu Historia Emprendedora",
-            "description": "Graba un video de 60 segundos contando tu historia como emprendedor en Guayaquil",
-            "type": "microvideo",
-            "points_reward": 50,
-            "position": 1,
-            "content": {
-                "instructions": "Graba un video corto presentándote y explicando tu emprendimiento",
-                "max_duration": 60,
-                "topics": ["Tu nombre", "Tu emprendimiento", "Tu motivación", "Tu visión para Guayaquil"]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📝 Mini-Quiz: Fundamentos del Emprendimiento",
-            "description": "Responde preguntas básicas sobre emprendimiento en Ecuador",
-            "type": "mini_quiz",
-            "points_reward": 30,
-            "position": 2,
-            "content": {
-                "questions": [
-                    {
-                        "question": "¿Cuál es el primer paso para crear una empresa en Ecuador?",
-                        "options": ["Registrar la marca", "Obtener el RUC", "Abrir una cuenta bancaria", "Contratar empleados"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Qué significa MVP en emprendimiento?",
-                        "options": ["Most Valuable Player", "Minimum Viable Product", "Maximum Value Proposition", "Marketing Viral Plan"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Cuál es la capital económica de Ecuador?",
-                        "options": ["Quito", "Cuenca", "Guayaquil", "Ambato"],
-                        "correct_answer": 2
-                    }
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📋 Guía Descargable: Trámites Legales",
-            "description": "Descarga y revisa la guía completa de trámites para emprendedores en Ecuador",
-            "type": "downloadable_guide",
-            "points_reward": 40,
-            "position": 3,
-            "content": {
-                "guide_url": "https://example.com/guia-tramites-ecuador.pdf",
-                "topics": ["RUC", "IESS", "Permisos municipales", "Patentes"],
-                "completion_requirement": "Confirmar lectura y responder pregunta final"
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📈 Tarea Práctica: Plan de Negocio Básico",
-            "description": "Crea un plan de negocio básico para tu emprendimiento siguiendo nuestra plantilla",
-            "type": "practical_task",
-            "points_reward": 80,
-            "position": 4,
-            "content": {
-                "template_sections": [
-                    "Resumen ejecutivo",
-                    "Descripción del producto/servicio",
-                    "Análisis de mercado",
-                    "Estrategia de marketing",
-                    "Proyección financiera básica"
-                ],
-                "deadline_hours": 48
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "💡 Consejo Experto: Networking en Guayaquil",
-            "description": "Aprende estrategias de networking específicas para el ecosistema emprendedor de Guayaquil",
-            "type": "expert_advice",
-            "points_reward": 35,
-            "position": 5,
-            "content": {
-                "expert_name": "Carlos Mendoza",
-                "expert_title": "Mentor de Emprendimiento - Cámara de Comercio de Guayaquil",
-                "video_url": "https://example.com/video-networking.mp4",
-                "key_points": [
-                    "Eventos clave en Guayaquil",
-                    "Plataformas digitales locales",
-                    "Cómo preparar tu elevator pitch",
-                    "Seguimiento efectivo de contactos"
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "💰 Mini-Quiz: Finanzas para Emprendedores",
-            "description": "Aprende conceptos básicos de finanzas y gestión de dinero para tu negocio",
-            "type": "mini_quiz",
-            "points_reward": 45,
-            "position": 6,
-            "content": {
-                "questions": [
-                    {
-                        "question": "¿Qué es el flujo de caja?",
-                        "options": ["Dinero total de la empresa", "Dinero que entra y sale", "Ganancias del mes", "Inversión inicial"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Cuál es la diferencia entre ingreso y ganancia?",
-                        "options": ["Son lo mismo", "Ganancia = Ingreso - Gastos", "Ingreso = Ganancia + Gastos", "No hay diferencia"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Qué es un presupuesto?",
-                        "options": ["Dinero disponible", "Plan de gastos e ingresos", "Dinero guardado", "Inversión total"],
-                        "correct_answer": 1
-                    }
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎯 Tarea Práctica: Define tu Cliente Ideal",
-            "description": "Identifica y describe detalladamente tu cliente ideal (buyer persona)",
-            "type": "practical_task",
-            "points_reward": 60,
-            "position": 7,
-            "content": {
-                "template_sections": [
-                    "Datos demográficos",
-                    "Comportamiento de compra",
-                    "Problemas y necesidades",
-                    "Dónde encuentra información",
-                    "Qué lo motiva a comprar"
-                ],
-                "deadline_hours": 24
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📱 Microvideo: Presenta tu Producto",
-            "description": "Graba un video de 90 segundos mostrando tu producto o servicio",
-            "type": "microvideo",
-            "points_reward": 70,
-            "position": 8,
-            "content": {
-                "instructions": "Muestra tu producto/servicio de manera atractiva y explica sus beneficios",
-                "max_duration": 90,
-                "topics": ["Qué es tu producto", "Beneficios clave", "Cómo funciona", "Por qué es único"]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🏆 Consejo Experto: Estrategias de Ventas",
-            "description": "Aprende técnicas de ventas efectivas para emprendedores principiantes",
-            "type": "expert_advice",
-            "points_reward": 55,
-            "position": 9,
-            "content": {
-                "expert_name": "María González",
-                "expert_title": "Consultora en Ventas - Guayaquil Chamber",
-                "video_url": "https://example.com/video-ventas.mp4",
-                "key_points": [
-                    "Técnicas de cierre de ventas",
-                    "Manejo de objeciones",
-                    "Construir relaciones a largo plazo",
-                    "Estrategias de seguimiento"
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📊 Tarea Práctica: Análisis de Competencia",
-            "description": "Investiga y analiza a tu competencia directa e indirecta",
-            "type": "practical_task",
-            "points_reward": 65,
-            "position": 10,
-            "content": {
-                "template_sections": [
-                    "Competidores directos",
-                    "Competidores indirectos",
-                    "Precios de la competencia",
-                    "Fortalezas y debilidades",
-                    "Oportunidades identificadas"
-                ],
-                "deadline_hours": 36
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        
-        # Intermediate Level Missions (11-20)
-        {
-            "title": "🌐 Guía Descargable: Marketing Digital",
-            "description": "Descarga la guía completa de marketing digital para pequeños negocios",
-            "type": "downloadable_guide",
-            "points_reward": 50,
-            "position": 11,
-            "content": {
-                "guide_url": "https://example.com/guia-marketing-digital.pdf",
-                "topics": ["Redes sociales", "SEO básico", "Email marketing", "Publicidad online"],
-                "completion_requirement": "Implementar una estrategia de la guía"
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📞 Tarea Práctica: Crear Elevator Pitch",
-            "description": "Desarrolla tu elevator pitch perfecto en 30 segundos",
-            "type": "practical_task",
-            "points_reward": 55,
-            "position": 12,
-            "content": {
-                "template_sections": [
-                    "Gancho inicial",
-                    "Problema que resuelves",
-                    "Tu solución",
-                    "Beneficio clave",
-                    "Llamada a la acción"
-                ],
-                "deadline_hours": 12
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "💡 Mini-Quiz: Innovación y Creatividad",
-            "description": "Desarrolla tu mentalidad innovadora y creativa",
-            "type": "mini_quiz",
-            "points_reward": 40,
-            "position": 13,
-            "content": {
-                "questions": [
-                    {
-                        "question": "¿Qué es la innovación disruptiva?",
-                        "options": ["Cambio pequeño", "Cambio radical", "Mejora continua", "Copia de ideas"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Cuál es la mejor fuente de ideas innovadoras?",
-                        "options": ["Internet", "Problemas no resueltos", "Competencia", "Libros"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Qué significa 'pensar fuera de la caja'?",
-                        "options": ["Ser ordenado", "Ser creativo", "Ser metódico", "Ser cauteloso"],
-                        "correct_answer": 1
-                    }
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎨 Microvideo: Storytelling de Marca",
-            "description": "Cuenta la historia de tu marca de manera emotiva y memorable",
-            "type": "microvideo",
-            "points_reward": 85,
-            "position": 14,
-            "content": {
-                "instructions": "Crea una historia que conecte emocionalmente con tu audiencia",
-                "max_duration": 120,
-                "topics": ["Origen de tu idea", "Desafíos superados", "Impacto en clientes", "Visión futura"]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎯 Consejo Experto: Gestión del Tiempo",
-            "description": "Aprende a maximizar tu productividad como emprendedor",
-            "type": "expert_advice",
-            "points_reward": 45,
-            "position": 15,
-            "content": {
-                "expert_name": "Roberto Silva",
-                "expert_title": "Coach de Productividad - Guayaquil Business Center",
-                "video_url": "https://example.com/video-productividad.mp4",
-                "key_points": [
-                    "Técnica Pomodoro",
-                    "Matriz de Eisenhower",
-                    "Automatización de tareas",
-                    "Delegación efectiva"
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📈 Tarea Práctica: Proyección Financiera",
-            "description": "Crea proyecciones financieras realistas para tu negocio",
-            "type": "practical_task",
-            "points_reward": 90,
-            "position": 16,
-            "content": {
-                "template_sections": [
-                    "Ingresos proyectados",
-                    "Gastos operativos",
-                    "Punto de equilibrio",
-                    "Flujo de caja mensual",
-                    "Análisis de rentabilidad"
-                ],
-                "deadline_hours": 72
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🤝 Microvideo: Testimonios de Clientes",
-            "description": "Graba testimonios reales de tus clientes satisfechos",
-            "type": "microvideo",
-            "points_reward": 100,
-            "position": 17,
-            "content": {
-                "instructions": "Presenta testimonios auténticos que generen confianza",
-                "max_duration": 150,
-                "topics": ["Problema del cliente", "Solución proporcionada", "Resultados obtenidos", "Recomendación"]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🏪 Guía Descargable: Retail y Punto de Venta",
-            "description": "Optimiza tu punto de venta físico o virtual",
-            "type": "downloadable_guide",
-            "points_reward": 60,
-            "position": 18,
-            "content": {
-                "guide_url": "https://example.com/guia-retail.pdf",
-                "topics": ["Merchandising", "Experiencia del cliente", "Sistemas de pago", "Gestión de inventario"],
-                "completion_requirement": "Implementar 3 mejoras en tu punto de venta"
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎪 Tarea Práctica: Evento de Lanzamiento",
-            "description": "Planifica y ejecuta un evento de lanzamiento para tu producto",
-            "type": "practical_task",
-            "points_reward": 120,
-            "position": 19,
-            "content": {
-                "template_sections": [
-                    "Objetivos del evento",
-                    "Público objetivo",
-                    "Presupuesto y logística",
-                    "Plan de promoción",
-                    "Métricas de éxito"
-                ],
-                "deadline_hours": 96
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "💎 Mini-Quiz: Liderazgo Emprendedor",
-            "description": "Desarrolla habilidades de liderazgo para tu equipo",
-            "type": "mini_quiz",
-            "points_reward": 50,
-            "position": 20,
-            "content": {
-                "questions": [
-                    {
-                        "question": "¿Cuál es la principal cualidad de un líder emprendedor?",
-                        "options": ["Autoridad", "Inspiración", "Control", "Experiencia"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Cómo se motiva mejor a un equipo?",
-                        "options": ["Con dinero", "Con reconocimiento", "Con propósito", "Con presión"],
-                        "correct_answer": 2
-                    },
-                    {
-                        "question": "¿Qué es delegación efectiva?",
-                        "options": ["Dar órdenes", "Asignar tareas con objetivos claros", "Hacer todo uno mismo", "Controlar cada detalle"],
-                        "correct_answer": 1
-                    }
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        
-        # Advanced Level Missions (21-30)
-        {
-            "title": "🌟 Consejo Experto: Scaling Your Business",
-            "description": "Aprende estrategias para escalar tu negocio exitosamente",
-            "type": "expert_advice",
-            "points_reward": 80,
-            "position": 21,
-            "content": {
-                "expert_name": "Ana Delgado",
-                "expert_title": "CEO - Guayaquil Ventures",
-                "video_url": "https://example.com/video-scaling.mp4",
-                "key_points": [
-                    "Sistemas escalables",
-                    "Automatización de procesos",
-                    "Construcción de equipos",
-                    "Búsqueda de inversión"
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎬 Microvideo: Presentación de Inversión",
-            "description": "Graba tu pitch deck perfecto para inversores",
-            "type": "microvideo",
-            "points_reward": 150,
-            "position": 22,
-            "content": {
-                "instructions": "Presenta tu negocio como una oportunidad de inversión atractiva",
-                "max_duration": 180,
-                "topics": ["Problema y solución", "Tamaño del mercado", "Modelo de negocio", "Proyecciones financieras"]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🏅 Tarea Práctica: Plan de Expansión",
-            "description": "Desarrolla un plan detallado para expandir tu negocio",
-            "type": "practical_task",
-            "points_reward": 140,
-            "position": 23,
-            "content": {
-                "template_sections": [
-                    "Análisis de mercado objetivo",
-                    "Estrategia de entrada",
-                    "Recursos necesarios",
-                    "Timeline de implementación",
-                    "Análisis de riesgos"
-                ],
-                "deadline_hours": 120
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "💻 Guía Descargable: Transformación Digital",
-            "description": "Digitaliza tu negocio con herramientas modernas",
-            "type": "downloadable_guide",
-            "points_reward": 70,
-            "position": 24,
-            "content": {
-                "guide_url": "https://example.com/guia-digital.pdf",
-                "topics": ["E-commerce", "CRM", "Automatización", "Analytics"],
-                "completion_requirement": "Implementar 2 herramientas digitales"
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎯 Mini-Quiz: Estrategia Competitiva",
-            "description": "Domina las estrategias para competir en tu mercado",
-            "type": "mini_quiz",
-            "points_reward": 60,
-            "position": 25,
-            "content": {
-                "questions": [
-                    {
-                        "question": "¿Qué es ventaja competitiva?",
-                        "options": ["Ser el más barato", "Ser único y valioso", "Ser el primero", "Ser el más grande"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Cuál es la mejor estrategia para un mercado maduro?",
-                        "options": ["Competir en precio", "Diferenciación", "Copiar líderes", "Abandonar el mercado"],
-                        "correct_answer": 1
-                    },
-                    {
-                        "question": "¿Qué es un océano azul?",
-                        "options": ["Mercado saturado", "Nuevo mercado sin competencia", "Mercado en declive", "Mercado internacional"],
-                        "correct_answer": 1
-                    }
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🚀 Tarea Práctica: Innovación de Producto",
-            "description": "Desarrolla una innovación significativa para tu producto/servicio",
-            "type": "practical_task",
-            "points_reward": 130,
-            "position": 26,
-            "content": {
-                "template_sections": [
-                    "Identificación de oportunidades",
-                    "Concepto de innovación",
-                    "Validación con usuarios",
-                    "Plan de desarrollo",
-                    "Estrategia de lanzamiento"
-                ],
-                "deadline_hours": 96
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🎖️ Consejo Experto: Sostenibilidad Empresarial",
-            "description": "Construye un negocio sostenible y responsable",
-            "type": "expert_advice",
-            "points_reward": 75,
-            "position": 27,
-            "content": {
-                "expert_name": "Patricia Morales",
-                "expert_title": "Especialista en Sostenibilidad - EcoGuayaquil",
-                "video_url": "https://example.com/video-sostenibilidad.mp4",
-                "key_points": [
-                    "Responsabilidad social",
-                    "Impacto ambiental",
-                    "Economía circular",
-                    "Certificaciones verdes"
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "📺 Microvideo: Caso de Éxito",
-            "description": "Documenta un caso de éxito real de tu emprendimiento",
-            "type": "microvideo",
-            "points_reward": 160,
-            "position": 28,
-            "content": {
-                "instructions": "Presenta un caso de éxito detallado que inspire a otros emprendedores",
-                "max_duration": 200,
-                "topics": ["Desafío enfrentado", "Estrategia implementada", "Resultados obtenidos", "Lecciones aprendidas"]
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "🏆 Tarea Práctica: Mentoría a Otro Emprendedor",
-            "description": "Comparte tu experiencia mentoreando a otro emprendedor",
-            "type": "practical_task",
-            "points_reward": 200,
-            "position": 29,
-            "content": {
-                "template_sections": [
-                    "Perfil del mentoreado",
-                    "Objetivos de mentoría",
-                    "Plan de sesiones",
-                    "Herramientas compartidas",
-                    "Resultados alcanzados"
-                ],
-                "deadline_hours": 168
-            },
-            "requirements": [],
-            "created_by": "system"
-        },
-        {
-            "title": "👑 Consejo Experto: Legado Emprendedor",
-            "description": "Construye un legado duradero con tu emprendimiento",
-            "type": "expert_advice",
-            "points_reward": 100,
-            "position": 30,
-            "content": {
-                "expert_name": "Diego Zambrano",
-                "expert_title": "Fundador - Legacy Builders Guayaquil",
-                "video_url": "https://example.com/video-legado.mp4",
-                "key_points": [
-                    "Visión a largo plazo",
-                    "Impacto social",
-                    "Sucesión empresarial",
-                    "Inspiración para futuras generaciones"
-                ]
-            },
-            "requirements": [],
-            "created_by": "system"
-        }
-    ]
-    
-    for mission_data in sample_missions:
-        mission = Mission(**mission_data)
-        await db.missions.insert_one(mission.dict())
-    
-    # Create comprehensive sample rewards
-    sample_rewards = [
-        # Educational Rewards
-        {
-            "title": "🎓 Certificado de Emprendedor Novato",
-            "description": "Certificado digital que acredita tu participación en el programa",
-            "type": "certificate",
-            "value": "PDF Certificate",
-            "points_cost": 50,
-            "external_url": "https://impulsa.guayaquil.gob.ec/certificado-novato"
-        },
-        {
-            "title": "📚 Curso Online: Marketing Digital",
-            "description": "Acceso completo a curso de marketing digital para emprendedores",
-            "type": "course",
-            "value": "30-day access",
-            "points_cost": 200,
-            "external_url": "https://impulsa.guayaquil.gob.ec/curso-marketing-digital"
-        },
-        {
-            "title": "🎯 Webinar Exclusivo: Estrategias de Ventas",
-            "description": "Acceso a webinar privado con expertos en ventas",
-            "type": "webinar",
-            "value": "2-hour session",
-            "points_cost": 150,
-            "external_url": "https://impulsa.guayaquil.gob.ec/webinar-ventas"
-        },
-        
-        # Financial Benefits
-        {
-            "title": "💰 Descuento en Consultoría Financiera",
-            "description": "30% de descuento en servicios de consultoría financiera",
-            "type": "discount",
-            "value": "30% off",
-            "points_cost": 100,
-            "external_url": "https://impulsa.guayaquil.gob.ec/consultoria-financiera"
-        },
-        {
-            "title": "🏦 Voucher de Cuenta Bancaria Gratuita",
-            "description": "Apertura gratuita de cuenta bancaria empresarial",
-            "type": "voucher",
-            "value": "$50 value",
-            "points_cost": 180,
-            "external_url": "https://impulsa.guayaquil.gob.ec/cuenta-bancaria"
-        },
-        {
-            "title": "📊 Análisis Crediticio Gratuito",
-            "description": "Evaluación gratuita de tu score crediticio y recomendaciones",
-            "type": "service",
-            "value": "Free analysis",
-            "points_cost": 120,
-            "external_url": "https://impulsa.guayaquil.gob.ec/analisis-crediticio"
-        },
-        
-        # Business Tools
-        {
-            "title": "🛠️ Kit de Herramientas Digitales",
-            "description": "Acceso a suite de herramientas digitales por 3 meses",
-            "type": "software",
-            "value": "3-month license",
-            "points_cost": 250,
-            "external_url": "https://impulsa.guayaquil.gob.ec/herramientas-digitales"
-        },
-        {
-            "title": "📱 Plantillas de Redes Sociales",
-            "description": "Pack de 50 plantillas profesionales para redes sociales",
-            "type": "templates",
-            "value": "50 templates",
-            "points_cost": 80,
-            "external_url": "https://impulsa.guayaquil.gob.ec/plantillas-social"
-        },
-        {
-            "title": "🖥️ Página Web Básica Gratuita",
-            "description": "Desarrollo de página web básica para tu emprendimiento",
-            "type": "website",
-            "value": "Basic website",
-            "points_cost": 500,
-            "external_url": "https://impulsa.guayaquil.gob.ec/pagina-web-gratis"
-        },
-        
-        # Mentorship & Networks
-        {
-            "title": "🤝 Mentoría Personalizada",
-            "description": "Sesión de mentoría 1:1 con experto en emprendimiento",
-            "type": "mentorship",
-            "value": "1 hour session",
-            "points_cost": 300,
-            "external_url": "https://impulsa.guayaquil.gob.ec/mentoria-personalizada"
-        },
-        {
-            "title": "🌐 Membresía en Red de Emprendedores",
-            "description": "Acceso exclusivo a la red de emprendedores de Guayaquil por 6 meses",
-            "type": "membership",
-            "value": "6-month access",
-            "points_cost": 220,
-            "external_url": "https://impulsa.guayaquil.gob.ec/red-emprendedores"
-        },
-        {
-            "title": "🏢 Acceso a Espacios de Coworking",
-            "description": "5 días gratis en espacios de coworking premium",
-            "type": "coworking",
-            "value": "5 days free",
-            "points_cost": 160,
-            "external_url": "https://impulsa.guayaquil.gob.ec/coworking-gratis"
-        },
-        
-        # Marketing & Promotion
-        {
-            "title": "📢 Campaña de Promoción Gratuita",
-            "description": "Promoción de tu emprendimiento en canales oficiales",
-            "type": "promotion",
-            "value": "1-week campaign",
-            "points_cost": 400,
-            "external_url": "https://impulsa.guayaquil.gob.ec/promocion-gratuita"
-        },
-        {
-            "title": "📸 Sesión de Fotos Profesional",
-            "description": "Sesión fotográfica profesional para tu producto/servicio",
-            "type": "photography",
-            "value": "2-hour session",
-            "points_cost": 350,
-            "external_url": "https://impulsa.guayaquil.gob.ec/fotos-profesionales"
-        },
-        {
-            "title": "🎬 Video Promocional Básico",
-            "description": "Producción de video promocional de 60 segundos",
-            "type": "video",
-            "value": "60-second video",
-            "points_cost": 600,
-            "external_url": "https://impulsa.guayaquil.gob.ec/video-promocional"
-        },
-        
-        # Legal & Administrative
-        {
-            "title": "⚖️ Consulta Legal Gratuita",
-            "description": "Consulta legal especializada en temas empresariales",
-            "type": "legal",
-            "value": "1-hour consultation",
-            "points_cost": 180,
-            "external_url": "https://impulsa.guayaquil.gob.ec/consulta-legal"
-        },
-        {
-            "title": "📋 Trámites Empresariales Facilitados",
-            "description": "Asistencia para trámites de constitución empresarial",
-            "type": "administrative",
-            "value": "Full assistance",
-            "points_cost": 280,
-            "external_url": "https://impulsa.guayaquil.gob.ec/tramites-empresariales"
-        }
-    ]
-    
-    for reward_data in sample_rewards:
-        reward = Reward(**reward_data)
-        await db.rewards.insert_one(reward.dict())
-    
-    # Create comprehensive sample events
-    sample_events = [
-        {
-            "title": "🎪 Feria de Emprendimiento Guayaquil 2025",
-            "description": "Evento anual donde los emprendedores pueden mostrar sus proyectos y conectar con inversores",
-            "location": "Centro de Convenciones de Guayaquil",
-            "date": datetime(2025, 8, 15, 9, 0),
-            "organizer": "Cámara de Comercio de Guayaquil",
-            "capacity": 500,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/feria-emprendimiento-2025"
-        },
-        {
-            "title": "💼 Taller: Finanzas para Emprendedores",
-            "description": "Aprende a manejar las finanzas de tu negocio desde cero",
-            "location": "Auditorio Universidad Católica",
-            "date": datetime(2025, 8, 10, 14, 0),
-            "organizer": "Universidad Católica de Guayaquil",
-            "capacity": 80,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/taller-finanzas"
-        },
-        {
-            "title": "🤝 Networking: Conecta con Inversores",
-            "description": "Evento de networking exclusivo para emprendedores y inversores",
-            "location": "Hotel Hilton Colon Guayaquil",
-            "date": datetime(2025, 8, 20, 18, 0),
-            "organizer": "Angel Investors Guayaquil",
-            "capacity": 100,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/networking-inversores"
-        },
-        {
-            "title": "🚀 Bootcamp: Lanzamiento de Startups",
-            "description": "Bootcamp intensivo de 3 días para acelerar tu startup",
-            "location": "Centro de Innovación Tecnológica",
-            "date": datetime(2025, 9, 5, 9, 0),
-            "organizer": "Startup Accelerator GYE",
-            "capacity": 50,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/bootcamp-startups"
-        },
-        {
-            "title": "🎯 Conferencia: Marketing Digital Avanzado",
-            "description": "Estrategias avanzadas de marketing digital para emprendedores",
-            "location": "Auditorio Banco Central",
-            "date": datetime(2025, 9, 12, 15, 0),
-            "organizer": "Digital Marketing Institute",
-            "capacity": 200,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/conferencia-marketing"
-        },
-        {
-            "title": "🌱 Seminario: Emprendimiento Sostenible",
-            "description": "Cómo crear negocios rentables y ambientalmente responsables",
-            "location": "Fundación Malecón 2000",
-            "date": datetime(2025, 9, 18, 10, 0),
-            "organizer": "EcoGuayaquil Foundation",
-            "capacity": 120,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/seminario-sostenible"
-        },
-        {
-            "title": "🎬 Pitch Day: Presenta tu Proyecto",
-            "description": "Presenta tu proyecto ante un panel de inversores y expertos",
-            "location": "Salón de Eventos Plaza Lagos",
-            "date": datetime(2025, 9, 25, 16, 0),
-            "organizer": "Venture Capital GYE",
-            "capacity": 30,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/pitch-day"
-        },
-        {
-            "title": "🏆 Concurso: Mejor Idea de Negocio",
-            "description": "Competencia para emprendedores con ideas innovadoras",
-            "location": "Universidad de Guayaquil",
-            "date": datetime(2025, 10, 2, 14, 0),
-            "organizer": "Universidad de Guayaquil",
-            "capacity": 150,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/concurso-ideas"
-        },
-        {
-            "title": "🎓 Masterclass: Liderazgo Empresarial",
-            "description": "Desarrolla habilidades de liderazgo para dirigir tu equipo",
-            "location": "Centro Empresarial Las Cámaras",
-            "date": datetime(2025, 10, 8, 17, 0),
-            "organizer": "Leadership Institute Ecuador",
-            "capacity": 60,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/masterclass-liderazgo"
-        },
-        {
-            "title": "💡 Hackathon: Soluciones Innovadoras",
-            "description": "48 horas creando soluciones tecnológicas para problemas locales",
-            "location": "Parque Tecnológico Guayaquil",
-            "date": datetime(2025, 10, 15, 18, 0),
-            "organizer": "Tech Community Guayaquil",
-            "capacity": 80,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/hackathon-2025"
-        },
-        {
-            "title": "🌐 Foro: Comercio Electrónico",
-            "description": "Tendencias y oportunidades en el comercio electrónico",
-            "location": "Hotel Sheraton Guayaquil",
-            "date": datetime(2025, 10, 22, 13, 0),
-            "organizer": "E-commerce Association Ecuador",
-            "capacity": 180,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/foro-ecommerce"
-        },
-        {
-            "title": "🎨 Taller: Branding y Diseño",
-            "description": "Crea una identidad visual impactante para tu marca",
-            "location": "Centro de Diseño Guayaquil",
-            "date": datetime(2025, 10, 29, 15, 30),
-            "organizer": "Design Studio GYE",
-            "capacity": 40,
-            "registration_url": "https://impulsa.guayaquil.gob.ec/taller-branding"
-        }
-    ]
-    
-    for event_data in sample_events:
-        event = Event(**event_data)
-        await db.events.insert_one(event.dict())
-    
-    # Create comprehensive enhanced achievements
-    sample_achievements = [
-        # Beginner Achievements
-        {
-            "title": "🚀 Primer Paso",
-            "description": "Completaste tu primera misión",
-            "icon": "🚀",
-            "condition": "complete_1_mission",
-            "missions_required": 1
-        },
-        {
-            "title": "🎯 Emprendedor Activo",
-            "description": "Completaste 5 misiones",
-            "icon": "⭐",
-            "condition": "complete_5_missions",
-            "missions_required": 5
-        },
-        {
-            "title": "🏆 Guayaquileño Comprometido",
-            "description": "Alcanzaste 100 puntos",
-            "icon": "🏆",
-            "condition": "reach_100_points",
-            "points_required": 100
-        },
-        {
-            "title": "💎 Emprendedor Experimentado",
-            "description": "Alcanzaste 500 puntos",
-            "icon": "💎",
-            "condition": "reach_500_points",
-            "points_required": 500
-        },
-        {
-            "title": "👑 Maestro Emprendedor",
-            "description": "Alcanzaste 1000 puntos",
-            "icon": "👑",
-            "condition": "reach_1000_points",
-            "points_required": 1000
-        },
-        {
-            "title": "🔥 Racha de Fuego",
-            "description": "Mantén una racha de 5 días completando misiones",
-            "icon": "🔥",
-            "condition": "streak_5_days",
-            "missions_required": 5
-        },
-        {
-            "title": "⚡ Imparable",
-            "description": "Mantén una racha de 10 días completando misiones",
-            "icon": "⚡",
-            "condition": "streak_10_days",
-            "missions_required": 10
-        },
-        
-        # Intermediate Achievements
-        {
-            "title": "📈 Emprendedor Dedicado",
-            "description": "Completaste 10 misiones",
-            "icon": "📈",
-            "condition": "complete_10_missions",
-            "missions_required": 10
-        },
-        {
-            "title": "🌟 Estrella Emprendedora",
-            "description": "Completaste 15 misiones",
-            "icon": "🌟",
-            "condition": "complete_15_missions",
-            "missions_required": 15
-        },
-        {
-            "title": "💰 Coleccionista de Puntos",
-            "description": "Alcanzaste 1500 puntos",
-            "icon": "💰",
-            "condition": "reach_1500_points",
-            "points_required": 1500
-        },
-        {
-            "title": "🎖️ Emprendedor Élite",
-            "description": "Alcanzaste 2000 puntos",
-            "icon": "🎖️",
-            "condition": "reach_2000_points",
-            "points_required": 2000
-        },
-        {
-            "title": "🏃 Velocista",
-            "description": "Completa 3 misiones en un día",
-            "icon": "🏃",
-            "condition": "complete_3_missions_one_day",
-            "missions_required": 3
-        },
-        {
-            "title": "🔗 Racha Épica",
-            "description": "Mantén una racha de 15 días",
-            "icon": "🔗",
-            "condition": "streak_15_days",
-            "missions_required": 15
-        },
-        {
-            "title": "🎬 Creador de Contenido",
-            "description": "Completa 5 misiones de microvideo",
-            "icon": "🎬",
-            "condition": "complete_5_microvideo_missions",
-            "missions_required": 5
-        },
-        {
-            "title": "🧠 Cerebro Emprendedor",
-            "description": "Completa 5 mini-quizzes",
-            "icon": "🧠",
-            "condition": "complete_5_quiz_missions",
-            "missions_required": 5
-        },
-        {
-            "title": "📚 Estudiante Aplicado",
-            "description": "Completa 3 guías descargables",
-            "icon": "📚",
-            "condition": "complete_3_guide_missions",
-            "missions_required": 3
-        },
-        
-        # Advanced Achievements
-        {
-            "title": "🚀 Emprendedor Completo",
-            "description": "Completaste 20 misiones",
-            "icon": "🚀",
-            "condition": "complete_20_missions",
-            "missions_required": 20
-        },
-        {
-            "title": "🌐 Emprendedor Global",
-            "description": "Completaste 25 misiones",
-            "icon": "🌐",
-            "condition": "complete_25_missions",
-            "missions_required": 25
-        },
-        {
-            "title": "💎 Millonario en Puntos",
-            "description": "Alcanzaste 3000 puntos",
-            "icon": "💎",
-            "condition": "reach_3000_points",
-            "points_required": 3000
-        },
-        {
-            "title": "🏆 Leyenda Emprendedora",
-            "description": "Alcanzaste 5000 puntos",
-            "icon": "🏆",
-            "condition": "reach_5000_points",
-            "points_required": 5000
-        },
-        {
-            "title": "🔥 Racha Legendaria",
-            "description": "Mantén una racha de 30 días",
-            "icon": "🔥",
-            "condition": "streak_30_days",
-            "missions_required": 30
-        },
-        {
-            "title": "🎯 Máquina de Misiones",
-            "description": "Completa 5 misiones en un día",
-            "icon": "🎯",
-            "condition": "complete_5_missions_one_day",
-            "missions_required": 5
-        },
-        {
-            "title": "🎨 Artista Visual",
-            "description": "Completa 10 misiones de microvideo",
-            "icon": "🎨",
-            "condition": "complete_10_microvideo_missions",
-            "missions_required": 10
-        },
-        {
-            "title": "🧙 Sabio Emprendedor",
-            "description": "Completa 10 mini-quizzes",
-            "icon": "🧙",
-            "condition": "complete_10_quiz_missions",
-            "missions_required": 10
-        },
-        {
-            "title": "📖 Devorador de Guías",
-            "description": "Completa 8 guías descargables",
-            "icon": "📖",
-            "condition": "complete_8_guide_missions",
-            "missions_required": 8
-        },
-        {
-            "title": "🛠️ Ejecutor Experto",
-            "description": "Completa 8 tareas prácticas",
-            "icon": "🛠️",
-            "condition": "complete_8_practical_missions",
-            "missions_required": 8
-        },
-        
-        # Expert Achievements
-        {
-            "title": "🌟 Completista",
-            "description": "Completaste todas las misiones disponibles",
-            "icon": "🌟",
-            "condition": "complete_all_missions",
-            "missions_required": 30
-        },
-        {
-            "title": "👑 Emperador del Emprendimiento",
-            "description": "Alcanzaste 10000 puntos",
-            "icon": "👑",
-            "condition": "reach_10000_points",
-            "points_required": 10000
-        },
-        {
-            "title": "🔥 Racha Infinita",
-            "description": "Mantén una racha de 50 días",
-            "icon": "🔥",
-            "condition": "streak_50_days",
-            "missions_required": 50
-        },
-        {
-            "title": "⚡ Velocidad Luz",
-            "description": "Completa 10 misiones en un día",
-            "icon": "⚡",
-            "condition": "complete_10_missions_one_day",
-            "missions_required": 10
-        },
-        {
-            "title": "🎪 Showman Total",
-            "description": "Completa 15 misiones de microvideo",
-            "icon": "🎪",
-            "condition": "complete_15_microvideo_missions",
-            "missions_required": 15
-        },
-        {
-            "title": "🏛️ Templo del Conocimiento",
-            "description": "Completa 15 guías descargables",
-            "icon": "🏛️",
-            "condition": "complete_15_guide_missions",
-            "missions_required": 15
-        },
-        {
-            "title": "💪 Trabajador Incansable",
-            "description": "Completa 15 tareas prácticas",
-            "icon": "💪",
-            "condition": "complete_15_practical_missions",
-            "missions_required": 15
-        },
-        {
-            "title": "🎓 Profesor Emprendedor",
-            "description": "Completa 10 consejos de experto",
-            "icon": "🎓",
-            "condition": "complete_10_expert_advice_missions",
-            "missions_required": 10
-        },
-        
-        # Special Achievements
-        {
-            "title": "🎂 Aniversario",
-            "description": "Lleva un año en la plataforma",
-            "icon": "🎂",
-            "condition": "one_year_member",
-            "missions_required": 1
-        },
-        {
-            "title": "🌅 Madrugador",
-            "description": "Completa una misión antes de las 6 AM",
-            "icon": "🌅",
-            "condition": "complete_mission_before_6am",
-            "missions_required": 1
-        },
-        {
-            "title": "🦉 Búho Nocturno",
-            "description": "Completa una misión después de las 11 PM",
-            "icon": "🦉",
-            "condition": "complete_mission_after_11pm",
-            "missions_required": 1
-        },
-        {
-            "title": "🎯 Perfeccionista",
-            "description": "Obtén puntaje perfecto en 5 mini-quizzes",
-            "icon": "🎯",
-            "condition": "perfect_score_5_quizzes",
-            "missions_required": 5
-        },
-        {
-            "title": "🎪 Emprendedor del Mes",
-            "description": "Sé el emprendedor con más puntos del mes",
-            "icon": "🎪",
-            "condition": "top_monthly_entrepreneur",
-            "missions_required": 1
-        },
-        {
-            "title": "🏅 Influencer Emprendedor",
-            "description": "Comparte 10 misiones en redes sociales",
-            "icon": "🏅",
-            "condition": "share_10_missions",
-            "missions_required": 10
-        },
-        {
-            "title": "🤝 Mentor Guía",
-            "description": "Ayuda a 5 emprendedores novatos",
-            "icon": "🤝",
-            "condition": "help_5_beginners",
-            "missions_required": 5
-        },
-        {
-            "title": "🌟 Emprendedor Inspirador",
-            "description": "Recibe 50 'me gusta' en tus videos",
-            "icon": "🌟",
-            "condition": "receive_50_likes",
-            "missions_required": 1
-        }
-    ]
-    
-    for achievement_data in sample_achievements:
-        achievement = Achievement(**achievement_data)
-        await db.achievements.insert_one(achievement.dict())
-    
-    return {"message": "Sample data initialized successfully"}
-
-# Include the router in the main app
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
