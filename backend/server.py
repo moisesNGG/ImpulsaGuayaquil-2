@@ -1988,3 +1988,702 @@ async def delete_user(user_id: str, current_user: User = Depends(get_admin_user)
     await db.evidences.delete_many({"user_id": user_id})
     
     return {"message": "User deleted successfully"}
+
+# Mission routes (Enhanced)
+@api_router.post("/missions", response_model=Mission)
+async def create_mission(mission_data: MissionCreate, current_user: User = Depends(get_admin_user)):
+    mission = Mission(**mission_data.dict(), created_by=current_user.id)
+    await db.missions.insert_one(mission.dict())
+    return mission
+
+@api_router.get("/missions", response_model=List[Mission])
+async def get_missions(
+    competence_area: Optional[CompetenceArea] = None,
+    difficulty_level: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100
+):
+    query = {}
+    if competence_area:
+        query["competence_area"] = competence_area
+    if difficulty_level:
+        query["difficulty_level"] = difficulty_level
+    
+    missions = await db.missions.find(query).sort("position", 1).skip(skip).limit(limit).to_list(limit)
+    return [Mission(**mission) for mission in missions]
+
+@api_router.get("/missions/by-competence")
+async def get_missions_by_competence():
+    """Get missions grouped by competence area"""
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$competence_area",
+                "missions": {"$push": "$$ROOT"},
+                "total": {"$sum": 1}
+            }
+        },
+        {"$sort": {"_id": 1}}
+    ]
+    
+    result = await db.missions.aggregate(pipeline).to_list(100)
+    
+    grouped_missions = {}
+    for group in result:
+        competence = group["_id"]
+        missions = [Mission(**mission) for mission in group["missions"]]
+        grouped_missions[competence] = {
+            "missions": missions,
+            "total": group["total"]
+        }
+    
+    return grouped_missions
+
+@api_router.put("/missions/{mission_id}", response_model=Mission)
+async def update_mission(mission_id: str, mission_data: MissionUpdate, current_user: User = Depends(get_admin_user)):
+    mission = await db.missions.find_one({"id": mission_id})
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    
+    update_data = {k: v for k, v in mission_data.dict().items() if v is not None}
+    if update_data:
+        await db.missions.update_one({"id": mission_id}, {"$set": update_data})
+    
+    updated_mission = await db.missions.find_one({"id": mission_id})
+    return Mission(**updated_mission)
+
+@api_router.delete("/missions/{mission_id}")
+async def delete_mission(mission_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.missions.delete_one({"id": mission_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return {"message": "Mission deleted successfully"}
+
+@api_router.get("/missions/{user_id}/with-status", response_model=List[MissionWithStatus])
+async def get_missions_with_status(user_id: str, current_user: User = Depends(get_current_user)):
+    # Users can only see their own missions, unless they're admin
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    missions = await db.missions.find().sort("position", 1).to_list(100)
+    completed_missions = user.get("completed_missions", [])
+    
+    missions_with_status = []
+    for mission in missions:
+        mission_obj = Mission(**mission)
+        
+        # Determine status
+        if mission_obj.id in completed_missions:
+            status = MissionStatus.COMPLETED
+        elif await check_mission_cooldown(user_id, mission_obj.id):
+            # Check prerequisites
+            prereq_met = all(prereq in completed_missions for prereq in mission_obj.prerequisite_missions)
+            status = MissionStatus.AVAILABLE if prereq_met else MissionStatus.LOCKED
+        else:
+            status = MissionStatus.LOCKED
+        
+        # Calculate progress percentage for partial completion
+        progress_percentage = 0.0
+        if status == MissionStatus.COMPLETED:
+            progress_percentage = 100.0
+        elif mission_obj.evidence_required:
+            # Check if evidence is pending review
+            evidence = await db.evidences.find_one({"user_id": user_id, "mission_id": mission_obj.id})
+            if evidence and evidence["status"] == "pending":
+                status = MissionStatus.IN_REVIEW
+                progress_percentage = 50.0
+        
+        missions_with_status.append(MissionWithStatus(
+            **mission_obj.dict(),
+            status=status,
+            progress_percentage=progress_percentage
+        ))
+    
+    return missions_with_status
+
+@api_router.get("/missions/{mission_id}/cooldown/{user_id}")
+async def check_mission_cooldown_status(mission_id: str, user_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    can_attempt = await check_mission_cooldown(user_id, mission_id)
+    
+    if not can_attempt:
+        user = await db.users.find_one({"id": user_id})
+        failed_missions = user.get("failed_missions", {})
+        failed_date = failed_missions.get(mission_id)
+        
+        if failed_date:
+            if isinstance(failed_date, str):
+                failed_date = datetime.fromisoformat(failed_date)
+            
+            retry_after = failed_date + timedelta(days=7)
+            
+            return {
+                "can_attempt": False,
+                "message": "Debes esperar 7 días antes de intentar esta misión nuevamente",
+                "retry_after": retry_after.isoformat(),
+                "days_remaining": (retry_after - datetime.utcnow()).days
+            }
+    
+    return {"can_attempt": True}
+
+@api_router.post("/missions/{mission_id}/complete")
+async def complete_mission(
+    mission_id: str, 
+    completion: MissionCompletion, 
+    current_user: User = Depends(get_current_user)
+):
+    mission = await db.missions.find_one({"id": mission_id})
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    
+    mission_obj = Mission(**mission)
+    user = current_user
+    
+    # Check if mission is already completed
+    if mission_id in user.completed_missions:
+        raise HTTPException(status_code=400, detail="Mission already completed")
+    
+    # Check cooldown
+    if not await check_mission_cooldown(user.id, mission_id):
+        raise HTTPException(status_code=400, detail="Mission is in cooldown period")
+    
+    # Check prerequisites
+    prereq_met = all(prereq in user.completed_missions for prereq in mission_obj.prerequisite_missions)
+    if not prereq_met:
+        raise HTTPException(status_code=400, detail="Prerequisites not met")
+    
+    success = False
+    score = 100.0
+    
+    # Handle different mission types
+    if mission_obj.type == MissionType.MINI_QUIZ:
+        questions = mission_obj.content.get("questions", [])
+        answers = completion.completion_data.get("answers", {})
+        
+        if not answers:
+            raise HTTPException(status_code=400, detail="No answers provided")
+        
+        correct_answers = 0
+        for i, question in enumerate(questions):
+            user_answer = answers.get(str(i))
+            if user_answer is not None and user_answer == question.get("correct", -1):
+                correct_answers += 1
+        
+        score = (correct_answers / len(questions)) * 100 if questions else 0
+        success = score >= 70  # 70% minimum to pass
+        
+        # Record attempt
+        attempt = MissionAttempt(
+            user_id=user.id,
+            mission_id=mission_id,
+            status=MissionAttemptStatus.SUCCESS if success else MissionAttemptStatus.FAILED,
+            score=score,
+            answers=answers
+        )
+        await db.mission_attempts.insert_one(attempt.dict())
+        
+        if not success:
+            # Add to failed missions with cooldown
+            await db.users.update_one(
+                {"id": user.id},
+                {
+                    "$set": {
+                        f"failed_missions.{mission_id}": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            return {
+                "success": False,
+                "score": score,
+                "message": f"Necesitas al menos 70% para completar la misión. Obtuviste {score:.1f}%. Podrás intentar nuevamente en 7 días.",
+                "retry_after": (datetime.utcnow() + timedelta(days=7)).isoformat()
+            }
+    
+    elif mission_obj.type in [MissionType.DOCUMENT_UPLOAD, MissionType.PRACTICAL_TASK, MissionType.MICROVIDEO]:
+        if mission_obj.evidence_required and not mission_obj.auto_approve:
+            # Mark as pending review
+            return {
+                "success": False,
+                "message": "Evidencia enviada. Está pendiente de revisión por parte del equipo.",
+                "status": "pending_review"
+            }
+        else:
+            success = True
+    
+    else:
+        # Other mission types auto-complete
+        success = True
+    
+    if success:
+        # Award points and coins
+        points_awarded = mission_obj.points_reward
+        coins_awarded = mission_obj.coins_reward
+        
+        # Update user
+        await db.users.update_one(
+            {"id": user.id},
+            {
+                "$push": {"completed_missions": mission_id},
+                "$inc": {
+                    "points": points_awarded,
+                    "coins": coins_awarded,
+                    "weekly_xp": points_awarded
+                },
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+        
+        # Update streak
+        await update_user_streak(user.id)
+        
+        # Check for level up
+        updated_user = await db.users.find_one({"id": user.id})
+        updated_user_obj = User(**updated_user)
+        level_changed = await check_and_update_user_level(updated_user_obj)
+        
+        # Award badges
+        badges_awarded = await award_badges_to_user(updated_user_obj)
+        
+        # Create success notification
+        notification = Notification(
+            user_id=user.id,
+            type=NotificationType.MISSION_AVAILABLE,
+            title="¡Misión Completada!",
+            message=f"Has completado '{mission_obj.title}' y ganado {points_awarded} puntos y {coins_awarded} monedas.",
+            data={
+                "mission_id": mission_id,
+                "points_awarded": points_awarded,
+                "coins_awarded": coins_awarded,
+                "level_changed": level_changed,
+                "badges_awarded": len(badges_awarded)
+            }
+        )
+        await db.notifications.insert_one(notification.dict())
+        
+        return {
+            "success": True,
+            "score": score,
+            "points_awarded": points_awarded,
+            "coins_awarded": coins_awarded,
+            "level_changed": level_changed,
+            "badges_awarded": [badge.title for badge in badges_awarded],
+            "message": f"¡Excelente! Has completado la misión y ganado {points_awarded} puntos y {coins_awarded} monedas."
+        }
+
+# Enhanced Event routes with eligibility
+@api_router.post("/events", response_model=Event)
+async def create_event(event_data: EventCreate, current_user: User = Depends(get_admin_user)):
+    event = Event(**event_data.dict())
+    await db.events.insert_one(event.dict())
+    return event
+
+@api_router.get("/events", response_model=List[Event])
+async def get_events(
+    event_type: Optional[EventType] = None,
+    ciudad: Optional[str] = None,
+    upcoming_only: bool = True,
+    skip: int = 0,
+    limit: int = 100
+):
+    query = {}
+    if event_type:
+        query["event_type"] = event_type
+    if ciudad:
+        query["ciudad"] = ciudad
+    if upcoming_only:
+        query["date"] = {"$gte": datetime.utcnow()}
+    
+    events = await db.events.find(query).sort("date", 1).skip(skip).limit(limit).to_list(limit)
+    return [Event(**event) for event in events]
+
+@api_router.get("/events/{event_id}", response_model=Event)
+async def get_event(event_id: str):
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return Event(**event)
+
+@api_router.put("/events/{event_id}", response_model=Event)
+async def update_event(event_id: str, event_data: EventUpdate, current_user: User = Depends(get_admin_user)):
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    update_data = {k: v for k, v in event_data.dict().items() if v is not None}
+    if update_data:
+        await db.events.update_one({"id": event_id}, {"$set": update_data})
+    
+    updated_event = await db.events.find_one({"id": event_id})
+    return Event(**updated_event)
+
+@api_router.delete("/events/{event_id}")
+async def delete_event(event_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.events.delete_one({"id": event_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Clean up related data
+    await db.eligibility_rules.delete_many({"event_id": event_id})
+    await db.qr_tokens.delete_many({"event_id": event_id})
+    
+    return {"message": "Event deleted successfully"}
+
+# Event Eligibility routes
+@api_router.post("/events/{event_id}/eligibility-rules", response_model=EligibilityRule)
+async def create_eligibility_rule(
+    event_id: str, 
+    rule_data: EligibilityRuleCreate, 
+    current_user: User = Depends(get_admin_user)
+):
+    # Validate that event exists
+    event = await db.events.find_one({"id": event_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Validate JSON condition
+    try:
+        json.loads(rule_data.condition)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON condition")
+    
+    rule = EligibilityRule(event_id=event_id, **rule_data.dict())
+    await db.eligibility_rules.insert_one(rule.dict())
+    
+    return rule
+
+@api_router.get("/events/{event_id}/eligibility-rules", response_model=List[EligibilityRule])
+async def get_event_eligibility_rules(event_id: str, current_user: User = Depends(get_current_user)):
+    rules = await db.eligibility_rules.find({"event_id": event_id}).to_list(100)
+    return [EligibilityRule(**rule) for rule in rules]
+
+@api_router.get("/events/{event_id}/eligibility/{user_id}", response_model=EventEligibility)
+async def get_event_eligibility(
+    event_id: str, 
+    user_id: str, 
+    current_user: User = Depends(get_current_user)
+):
+    # Users can only check their own eligibility unless admin
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    eligibility = await calculate_event_eligibility(user_id, event_id)
+    
+    # Store eligibility calculation in database
+    await db.event_eligibilities.replace_one(
+        {"event_id": event_id, "user_id": user_id},
+        eligibility.dict(),
+        upsert=True
+    )
+    
+    return eligibility
+
+@api_router.get("/events/{event_id}/suggestions/{user_id}")
+async def get_event_suggestions(
+    event_id: str, 
+    user_id: str, 
+    current_user: User = Depends(get_current_user)
+):
+    """Get smart suggestions for what user needs to be eligible for event"""
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    suggestions = await generate_suggestions_for_event(user_id, event_id)
+    return {"suggestions": suggestions}
+
+# QR Token routes
+@api_router.post("/qr-token/generate")
+async def generate_user_qr_token(
+    event_id: Optional[str] = None, 
+    current_user: User = Depends(get_current_user)
+):
+    """Generate QR token for current user"""
+    qr_token = await generate_qr_token(current_user.id, event_id)
+    
+    # Generate QR code image data
+    qr_data = {
+        "token": qr_token.token,
+        "user_id": qr_token.user_id,
+        "event_id": qr_token.event_id,
+        "status": qr_token.status.value,
+        "expires_at": qr_token.expires_at.isoformat()
+    }
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(json.dumps(qr_data))
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to base64
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return {
+        "qr_token": qr_token,
+        "qr_image": f"data:image/png;base64,{img_str}",
+        "expires_in_minutes": 5
+    }
+
+@api_router.post("/qr-token/verify")
+async def verify_qr_token(token_data: dict, current_user: User = Depends(get_current_user)):
+    """Verify QR token (for staff check-in)"""
+    token = token_data.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
+    
+    qr_token = await db.qr_tokens.find_one({"token": token})
+    if not qr_token:
+        raise HTTPException(status_code=404, detail="Invalid token")
+    
+    qr_token_obj = QRToken(**qr_token)
+    
+    # Check if token is expired
+    if datetime.utcnow() > qr_token_obj.expires_at:
+        raise HTTPException(status_code=400, detail="Token expired")
+    
+    # Check if token is already used
+    if qr_token_obj.used:
+        raise HTTPException(status_code=400, detail="Token already used")
+    
+    # Mark token as used
+    await db.qr_tokens.update_one(
+        {"id": qr_token_obj.id},
+        {
+            "$set": {
+                "used": True,
+                "used_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    return {
+        "valid": True,
+        "user_info": qr_token_obj.user_info,
+        "status": qr_token_obj.status,
+        "event_id": qr_token_obj.event_id,
+        "verification_time": datetime.utcnow().isoformat()
+    }
+
+# Document and Evidence routes
+@api_router.post("/documents/upload")
+async def upload_document(
+    document_type: DocumentType = Form(...),
+    expiry_date: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload user document"""
+    # Validate file type
+    allowed_types = ["application/pdf", "image/jpeg", "image/png", "video/mp4"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail="Only PDF, JPG, PNG, and MP4 files are allowed"
+        )
+    
+    # Create file path (in production, use cloud storage)
+    file_path = f"documents/{current_user.id}/{file.filename}"
+    
+    # Parse expiry date
+    expiry_datetime = None
+    if expiry_date:
+        try:
+            expiry_datetime = datetime.fromisoformat(expiry_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid expiry date format")
+    
+    document = Document(
+        user_id=current_user.id,
+        document_type=document_type,
+        file_path=file_path,
+        file_name=file.filename,
+        file_size=0,  # In production, get actual file size
+        mime_type=file.content_type,
+        expiry_date=expiry_datetime
+    )
+    
+    await db.documents.insert_one(document.dict())
+    
+    return {
+        "success": True,
+        "document_id": document.id,
+        "message": "Document uploaded successfully. It will be reviewed by our team."
+    }
+
+@api_router.get("/documents/user/{user_id}")
+async def get_user_documents(
+    user_id: str, 
+    document_type: Optional[DocumentType] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user documents"""
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    query = {"user_id": user_id}
+    if document_type:
+        query["document_type"] = document_type
+    
+    documents = await db.documents.find(query).to_list(100)
+    return [Document(**doc) for doc in documents]
+
+@api_router.post("/evidences/upload")
+async def upload_evidence(
+    mission_id: str = Form(...),
+    document_type: Optional[DocumentType] = Form(None),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload mission evidence"""
+    # Validate mission exists
+    mission = await db.missions.find_one({"id": mission_id})
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    
+    # Validate file type
+    allowed_types = ["application/pdf", "image/jpeg", "image/png", "video/mp4"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail="Only PDF, JPG, PNG, and MP4 files are allowed"
+        )
+    
+    # Create file path
+    file_path = f"evidences/{current_user.id}/{mission_id}/{file.filename}"
+    
+    evidence = Evidence(
+        user_id=current_user.id,
+        mission_id=mission_id,
+        document_type=document_type,
+        file_path=file_path,
+        file_name=file.filename,
+        file_size=0,  # In production, get actual file size
+        mime_type=file.content_type,
+        description=description
+    )
+    
+    await db.evidences.insert_one(evidence.dict())
+    
+    return {
+        "success": True,
+        "evidence_id": evidence.id,
+        "message": "Evidence uploaded successfully. It will be reviewed by our team."
+    }
+
+@api_router.get("/evidences/pending")
+async def get_pending_evidences(
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_reviewer_user)
+):
+    """Get pending evidences for review"""
+    evidences = await db.evidences.find(
+        {"status": DocumentStatus.PENDING}
+    ).skip(skip).limit(limit).to_list(limit)
+    
+    # Enrich with user and mission data
+    enriched_evidences = []
+    for evidence in evidences:
+        evidence_obj = Evidence(**evidence)
+        
+        # Get user info
+        user = await db.users.find_one({"id": evidence_obj.user_id})
+        mission = await db.missions.find_one({"id": evidence_obj.mission_id})
+        
+        enriched_evidences.append({
+            "evidence": evidence_obj,
+            "user": {
+                "nombre": user["nombre"] if user else "Unknown",
+                "apellido": user["apellido"] if user else "User",
+                "emprendimiento": user["nombre_emprendimiento"] if user else ""
+            },
+            "mission": {
+                "title": mission["title"] if mission else "Unknown Mission",
+                "competence_area": mission["competence_area"] if mission else ""
+            }
+        })
+    
+    return enriched_evidences
+
+@api_router.post("/evidences/{evidence_id}/review")
+async def review_evidence(
+    evidence_id: str,
+    review_data: EvidenceReview,
+    current_user: User = Depends(get_reviewer_user)
+):
+    """Review evidence submission"""
+    evidence = await db.evidences.find_one({"id": evidence_id})
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    
+    # Update evidence status
+    await db.evidences.update_one(
+        {"id": evidence_id},
+        {
+            "$set": {
+                "status": review_data.status,
+                "reviewed_by": current_user.id,
+                "review_notes": review_data.review_notes,
+                "reviewed_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    # If approved, complete the mission
+    if review_data.status == DocumentStatus.APPROVED:
+        mission_id = evidence["mission_id"]
+        user_id = evidence["user_id"]
+        
+        # Check if mission is already completed
+        user = await db.users.find_one({"id": user_id})
+        if mission_id not in user["completed_missions"]:
+            mission = await db.missions.find_one({"id": mission_id})
+            mission_obj = Mission(**mission)
+            
+            # Award points and coins
+            await db.users.update_one(
+                {"id": user_id},
+                {
+                    "$push": {"completed_missions": mission_id},
+                    "$inc": {
+                        "points": mission_obj.points_reward,
+                        "coins": mission_obj.coins_reward
+                    },
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            
+            # Update streak and check level up
+            await update_user_streak(user_id)
+            updated_user = await db.users.find_one({"id": user_id})
+            await check_and_update_user_level(User(**updated_user))
+    
+    # Create notification
+    notification_type = NotificationType.EVIDENCE_APPROVED if review_data.status == DocumentStatus.APPROVED else NotificationType.EVIDENCE_REJECTED
+    notification = Notification(
+        user_id=evidence["user_id"],
+        type=notification_type,
+        title="Evidencia Revisada",
+        message=f"Tu evidencia ha sido {'aprobada' if review_data.status == DocumentStatus.APPROVED else 'rechazada'}. {review_data.review_notes}",
+        data={
+            "evidence_id": evidence_id,
+            "status": review_data.status,
+            "review_notes": review_data.review_notes
+        }
+    )
+    await db.notifications.insert_one(notification.dict())
+    
+    return {
+        "success": True,
+        "message": f"Evidence {'approved' if review_data.status == DocumentStatus.APPROVED else 'rejected'} successfully"
+    }
