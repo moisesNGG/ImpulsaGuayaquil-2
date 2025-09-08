@@ -1947,7 +1947,512 @@ const Profile = ({ user, onRefreshUser }) => {
   );
 };
 
-// Leagues Component
+// Admin Component
+const Admin = ({ user }) => {
+  const [stats, setStats] = useState(null);
+  const [pendingEvidences, setPendingEvidences] = useState([]);
+  const [selectedTab, setSelectedTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadAdminStats();
+    loadPendingEvidences();
+  }, []);
+
+  const loadAdminStats = async () => {
+    try {
+      const response = await axios.get('/admin/stats');
+      setStats(response.data);
+    } catch (error) {
+      console.error('Error loading admin stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPendingEvidences = async () => {
+    try {
+      const response = await axios.get('/evidences/pending');
+      setPendingEvidences(response.data);
+    } catch (error) {
+      console.error('Error loading pending evidences:', error);
+    }
+  };
+
+  const reviewEvidence = async (evidenceId, status, notes = '') => {
+    try {
+      await axios.post(`/evidences/${evidenceId}/review`, {
+        status,
+        review_notes: notes
+      });
+      
+      loadPendingEvidences();
+      alert(`Evidencia ${status === 'approved' ? 'aprobada' : 'rechazada'} exitosamente`);
+    } catch (error) {
+      console.error('Error reviewing evidence:', error);
+      alert('Error al revisar evidencia: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
+  const exportData = async (type) => {
+    try {
+      const response = await axios.get(`/admin/export/${type}?format=csv`);
+      
+      // Create and download CSV file
+      const blob = new Blob([response.data.csv_data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type}-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      alert('Error al exportar datos');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  const adminTabs = [
+    { id: 'overview', label: 'Resumen', icon: '📊' },
+    { id: 'evidences', label: 'Evidencias', icon: '📋' },
+    { id: 'users', label: 'Usuarios', icon: '👥' },
+    { id: 'reports', label: 'Reportes', icon: '📈' }
+  ];
+
+  return (
+    <div className="max-w-6xl mx-auto p-4">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">👨‍💼 Panel de Administración</h1>
+            <p className="text-blue-100 mt-1">Gestiona usuarios, contenido y revisa evidencias</p>
+          </div>
+          <div className="text-right">
+            <div className="text-4xl font-bold">{stats?.total_users || 0}</div>
+            <div className="text-blue-100">usuarios totales</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex space-x-4 mb-8 overflow-x-auto">
+        {adminTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setSelectedTab(tab.id)}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
+              selectedTab === tab.id
+                ? 'bg-guayaquil-blue text-white'
+                : 'bg-white text-guayaquil-text hover:bg-guayaquil-lighter'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Overview Tab */}
+      {selectedTab === 'overview' && stats && (
+        <div className="space-y-8">
+          {/* Key Metrics */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-2xl">
+                  👥
+                </div>
+                <div>
+                  <h3 className="font-bold text-guayaquil-dark text-2xl">{stats.total_users}</h3>
+                  <p className="text-guayaquil-text text-sm">Usuarios Totales</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-2xl">
+                  🎯
+                </div>
+                <div>
+                  <h3 className="font-bold text-guayaquil-dark text-2xl">{stats.total_missions}</h3>
+                  <p className="text-guayaquil-text text-sm">Misiones Creadas</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center text-2xl">
+                  ✅
+                </div>
+                <div>
+                  <h3 className="font-bold text-guayaquil-dark text-2xl">{stats.total_completed_missions}</h3>
+                  <p className="text-guayaquil-text text-sm">Misiones Completadas</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-2xl">
+                  📈
+                </div>
+                <div>
+                  <h3 className="font-bold text-guayaquil-dark text-2xl">{stats.active_users_last_week}</h3>
+                  <p className="text-guayaquil-text text-sm">Usuarios Activos (7d)</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Performers */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-xl font-bold text-guayaquil-dark mb-4">🏆 Top Emprendedores</h2>
+            <div className="space-y-3">
+              {stats.top_performers.slice(0, 5).map((performer, index) => (
+                <div key={performer.user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-2xl">
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}°`}
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-guayaquil-dark">
+                        {performer.user.nombre} {performer.user.apellido}
+                      </h4>
+                      <p className="text-sm text-guayaquil-text">{performer.user.emprendimiento}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-guayaquil-blue">{performer.points} pts</div>
+                    <div className="text-sm text-guayaquil-text">
+                      {performer.completed_missions} misiones • 🔥 {performer.current_streak}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Most Popular Missions */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-xl font-bold text-guayaquil-dark mb-4">🎯 Misiones Más Populares</h2>
+            <div className="space-y-3">
+              {stats.most_popular_missions.slice(0, 5).map((item, index) => (
+                <div key={item.mission.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-2xl">{getMissionIcon(item.mission.type)}</div>
+                    <div>
+                      <h4 className="font-medium text-guayaquil-dark">{item.mission.title}</h4>
+                      <p className="text-sm text-guayaquil-text">
+                        {item.mission.competence_area.replace('_', ' ').toUpperCase()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-guayaquil-blue">{item.completion_count}</div>
+                    <div className="text-sm text-guayaquil-text">completaciones</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Evidences Tab */}
+      {selectedTab === 'evidences' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-guayaquil-dark">📋 Evidencias Pendientes</h2>
+            <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">
+              {pendingEvidences.length} pendientes
+            </div>
+          </div>
+
+          {pendingEvidences.length > 0 ? (
+            <div className="space-y-4">
+              {pendingEvidences.map((item) => (
+                <div key={item.evidence.id} className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="text-2xl">{getMissionIcon('practical_task')}</div>
+                      <div>
+                        <h3 className="font-bold text-guayaquil-dark">{item.mission.title}</h3>
+                        <p className="text-sm text-guayaquil-text">
+                          Por: {item.user.nombre} {item.user.apellido} ({item.user.emprendimiento})
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-sm text-guayaquil-text">
+                      {new Date(item.evidence.uploaded_at).toLocaleDateString('es-EC')}
+                    </div>
+                  </div>
+
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-guayaquil-text">
+                      <strong>Archivo:</strong> {item.evidence.file_name}
+                    </p>
+                    {item.evidence.description && (
+                      <p className="text-sm text-guayaquil-text mt-2">
+                        <strong>Descripción:</strong> {item.evidence.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => reviewEvidence(item.evidence.id, 'approved', 'Evidencia aprobada correctamente.')}
+                      className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      ✅ Aprobar
+                    </button>
+                    <button
+                      onClick={() => {
+                        const notes = prompt('Notas de rechazo (opcional):');
+                        if (notes !== null) {
+                          reviewEvidence(item.evidence.id, 'rejected', notes || 'Evidencia no cumple con los requisitos.');
+                        }
+                      }}
+                      className="flex-1 bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      ❌ Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📋</div>
+              <h3 className="text-xl font-bold text-guayaquil-dark mb-2">No hay evidencias pendientes</h3>
+              <p className="text-guayaquil-text">¡Excelente! Todas las evidencias han sido revisadas.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Users Tab */}
+      {selectedTab === 'users' && stats && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-guayaquil-dark">👥 Usuarios</h2>
+            <button
+              onClick={() => exportData('users')}
+              className="bg-guayaquil-blue text-white px-4 py-2 rounded-lg hover:bg-guayaquil-primary"
+            >
+              📥 Exportar CSV
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(stats.user_distribution_by_city).map(([city, count]) => (
+              <div key={city} className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-guayaquil-dark">📍 {city}</h4>
+                    <p className="text-2xl font-bold text-guayaquil-blue">{count}</p>
+                  </div>
+                  <div className="text-sm text-guayaquil-text">
+                    {((count / stats.total_users) * 100).toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-lg font-bold text-guayaquil-dark mb-4">Progreso por Competencia</h3>
+            <div className="space-y-3">
+              {Object.entries(stats.completion_rate_by_competence).map(([competence, rate]) => (
+                <div key={competence} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span>{getCompetenceIcon(competence)}</span>
+                    <span className="font-medium">{competence.replace('_', ' ').toUpperCase()}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-guayaquil-blue h-2 rounded-full"
+                        style={{ width: `${rate}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium">{rate.toFixed(1)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reports Tab */}
+      {selectedTab === 'reports' && (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-guayaquil-dark">📈 Reportes y Métricas</h2>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-guayaquil-dark mb-4">📊 Exportar Datos</h3>
+              <div className="space-y-3">
+                <button
+                  onClick={() => exportData('users')}
+                  className="w-full flex items-center space-x-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <span>👥</span>
+                  <span>Exportar Usuarios</span>
+                </button>
+                
+                <button
+                  onClick={() => exportData('missions-progress')}
+                  className="w-full flex items-center space-x-3 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+                >
+                  <span>🎯</span>
+                  <span>Exportar Progreso de Misiones</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-guayaquil-dark mb-4">⚙️ Herramientas Admin</h3>
+              <div className="space-y-3">
+                <button
+                  onClick={async () => {
+                    if (window.confirm('¿Estás seguro de resetear las ligas semanales?')) {
+                      try {
+                        await axios.post('/admin/reset-weekly-leagues');
+                        alert('Ligas semanales reseteadas exitosamente');
+                      } catch (error) {
+                        alert('Error al resetear ligas');
+                      }
+                    }
+                  }}
+                  className="w-full flex items-center space-x-3 p-3 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors"
+                >
+                  <span>🏅</span>
+                  <span>Resetear Ligas Semanales</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {stats && (
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-guayaquil-dark mb-4">📈 Tendencia de Engagement</h3>
+              <div className="space-y-3">
+                {stats.weekly_engagement_trend.slice(0, 4).map((week, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="font-medium">{week.week}</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-guayaquil-blue h-2 rounded-full"
+                          style={{ width: `${(week.active_users / stats.total_users) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-sm">{week.active_users} usuarios</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Main App Component
+const App = () => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [currentTab, setCurrentTab] = useState('home');
+
+  return (
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-50">
+        <AuthConsumer 
+          isLogin={isLogin}
+          setIsLogin={setIsLogin}
+          currentTab={currentTab}
+          setCurrentTab={setCurrentTab}
+        />
+      </div>
+    </AuthProvider>
+  );
+};
+
+const AuthConsumer = ({ isLogin, setIsLogin, currentTab, setCurrentTab }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return isLogin ? (
+      <LoginForm onToggleRegister={() => setIsLogin(false)} />
+    ) : (
+      <RegisterForm onToggleLogin={() => setIsLogin(true)} />
+    );
+  }
+
+  const onRefreshUser = async () => {
+    // This will be handled by the auth context
+    window.location.reload();
+  };
+
+  const renderCurrentTab = () => {
+    switch (currentTab) {
+      case 'home':
+        return <Home user={user} onRefreshUser={onRefreshUser} />;
+      case 'missions':
+        return <Home user={user} onRefreshUser={onRefreshUser} />;
+      case 'events':
+        return <Events user={user} />;
+      case 'achievements':
+        return <Achievements user={user} />;
+      case 'rewards':
+        return <Rewards user={user} onRefreshUser={onRefreshUser} />;
+      case 'leagues':
+        return <Leagues user={user} />;
+      case 'profile':
+        return <Profile user={user} onRefreshUser={onRefreshUser} />;
+      case 'admin':
+        return user.role === 'admin' ? <Admin user={user} /> : <Home user={user} onRefreshUser={onRefreshUser} />;
+      default:
+        return <Home user={user} onRefreshUser={onRefreshUser} />;
+    }
+  };
+
+  return (
+    <>
+      <Navigation 
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        user={user}
+      />
+      {renderCurrentTab()}
+    </>
+  );
+};
+
+export default App;
 const Leagues = ({ user }) => {
   const [currentLeagues, setCurrentLeagues] = useState([]);
   const [selectedLeague, setSelectedLeague] = useState(null);
