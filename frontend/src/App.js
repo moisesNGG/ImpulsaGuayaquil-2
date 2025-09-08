@@ -907,6 +907,1046 @@ const Events = ({ user }) => {
   );
 };
 
+// Login Component
+const LoginForm = ({ onToggleRegister }) => {
+  const [cedula, setCedula] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { login } = useAuth();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    
+    const result = await login(cedula, password);
+    
+    if (!result.success) {
+      setError(result.error);
+    }
+    
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-gradient-to-br from-guayaquil-blue to-guayaquil-primary rounded-full flex items-center justify-center text-3xl text-white mb-4 mx-auto">
+            🚀
+          </div>
+          <h1 className="text-2xl font-bold text-guayaquil-dark">Impulsa Guayaquil</h1>
+          <p className="text-guayaquil-text mt-2">Iniciar Sesión</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-guayaquil-text mb-2">
+              Cédula
+            </label>
+            <input
+              type="text"
+              value={cedula}
+              onChange={(e) => setCedula(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              placeholder="1234567890"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-guayaquil-text mb-2">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              placeholder="Tu contraseña"
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white py-3 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
+          >
+            {loading ? <LoadingSpinner /> : 'Iniciar Sesión'}
+          </button>
+
+          <div className="text-center">
+            <p className="text-guayaquil-text">
+              ¿No tienes cuenta?{' '}
+              <button
+                type="button"
+                onClick={onToggleRegister}
+                className="text-guayaquil-blue hover:text-guayaquil-primary font-medium"
+              >
+                Regístrate
+              </button>
+            </p>
+          </div>
+
+          <div className="text-center text-sm text-guayaquil-text">
+            <p>Demo Admin: 0000000000 / admin</p>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Register Component
+const RegisterForm = ({ onToggleLogin }) => {
+  const [formData, setFormData] = useState({
+    nombre: '',
+    apellido: '',
+    cedula: '',
+    email: '',
+    nombre_emprendimiento: '',
+    password: '',
+    ciudad: 'Guayaquil',
+    cohorte: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const { register } = useAuth();
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    
+    const result = await register(formData);
+    
+    if (result.success) {
+      setSuccess(true);
+      setTimeout(() => {
+        onToggleLogin();
+      }, 2000);
+    } else {
+      setError(result.error);
+    }
+    
+    setLoading(false);
+  };
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
+          <div className="text-6xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-guayaquil-dark mb-2">¡Registro Exitoso!</h2>
+          <p className="text-guayaquil-text mb-4">
+            Tu cuenta ha sido creada correctamente. Redirigiendo al login...
+          </p>
+          <LoadingSpinner />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-gradient-to-br from-guayaquil-blue to-guayaquil-primary rounded-full flex items-center justify-center text-3xl text-white mb-4 mx-auto">
+            🚀
+          </div>
+          <h1 className="text-2xl font-bold text-guayaquil-dark">Impulsa Guayaquil</h1>
+          <p className="text-guayaquil-text mt-2">Crear Cuenta</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-guayaquil-text mb-1">
+                Nombre
+              </label>
+              <input
+                type="text"
+                name="nombre"
+                value={formData.nombre}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-guayaquil-text mb-1">
+                Apellido
+              </label>
+              <input
+                type="text"
+                name="apellido"
+                value={formData.apellido}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-guayaquil-text mb-1">
+              Cédula
+            </label>
+            <input
+              type="text"
+              name="cedula"
+              value={formData.cedula}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              placeholder="1234567890"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-guayaquil-text mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-guayaquil-text mb-1">
+              Nombre del Emprendimiento
+            </label>
+            <input
+              type="text"
+              name="nombre_emprendimiento"
+              value={formData.nombre_emprendimiento}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-guayaquil-text mb-1">
+                Ciudad
+              </label>
+              <select
+                name="ciudad"
+                value={formData.ciudad}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              >
+                <option value="Guayaquil">Guayaquil</option>
+                <option value="Quito">Quito</option>
+                <option value="Cuenca">Cuenca</option>
+                <option value="Machala">Machala</option>
+                <option value="Manta">Manta</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-guayaquil-text mb-1">
+                Cohorte (Opcional)
+              </label>
+              <input
+                type="text"
+                name="cohorte"
+                value={formData.cohorte}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+                placeholder="Ej: 2025-Q1"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-guayaquil-text mb-1">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-guayaquil-blue focus:border-transparent"
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white py-3 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
+          >
+            {loading ? <LoadingSpinner /> : 'Crear Cuenta'}
+          </button>
+
+          <div className="text-center">
+            <p className="text-guayaquil-text">
+              ¿Ya tienes cuenta?{' '}
+              <button
+                type="button"
+                onClick={onToggleLogin}
+                className="text-guayaquil-blue hover:text-guayaquil-primary font-medium"
+              >
+                Inicia Sesión
+              </button>
+            </p>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Achievements Component
+const Achievements = ({ user }) => {
+  const [badges, setBadges] = useState([]);
+  const [userBadges, setUserBadges] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadBadges();
+    loadUserBadges();
+  }, [user]);
+
+  const loadBadges = async () => {
+    try {
+      const response = await axios.get('/badges');
+      setBadges(response.data);
+    } catch (error) {
+      console.error('Error loading badges:', error);
+    }
+  };
+
+  const loadUserBadges = async () => {
+    try {
+      const response = await axios.get(`/badges/user/${user.id}`);
+      setUserBadges(response.data);
+    } catch (error) {
+      console.error('Error loading user badges:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  const earnedBadges = userBadges.map(ub => ub.badge);
+  const availableBadges = badges.filter(badge => !earnedBadges.some(eb => eb.id === badge.id));
+
+  return (
+    <div className="max-w-6xl mx-auto p-4">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">🏆 Tus Logros</h1>
+            <p className="text-blue-100 mt-1">Celebra tus éxitos emprendedores</p>
+          </div>
+          <div className="text-right">
+            <div className="text-4xl font-bold">{earnedBadges.length}</div>
+            <div className="text-blue-100">de {badges.length}</div>
+          </div>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-blue-100">Progreso Total</span>
+            <span className="text-blue-100">{Math.round((earnedBadges.length / badges.length) * 100)}%</span>
+          </div>
+          <div className="w-full bg-blue-200 rounded-full h-3">
+            <div 
+              className="bg-guayaquil-yellow h-3 rounded-full transition-all duration-500"
+              style={{ width: `${(earnedBadges.length / badges.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Earned Achievements */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-guayaquil-dark mb-4">Logros Obtenidos</h2>
+        {earnedBadges.length > 0 ? (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userBadges.map((userBadge) => (
+              <div key={userBadge.badge.id} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-l-4 border-green-500 shadow-lg">
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="text-4xl bg-green-100 rounded-full p-3">
+                    {userBadge.badge.icon}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-green-800 text-lg">{userBadge.badge.title}</h3>
+                    <p className="text-green-600 text-sm">{userBadge.badge.description}</p>
+                  </div>
+                  <div className="text-green-500 text-2xl">✅</div>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-green-600">
+                    Obtenido el: {new Date(userBadge.user_badge.earned_at).toLocaleDateString('es-EC')}
+                  </span>
+                  {userBadge.badge.coins_reward > 0 && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                      +{userBadge.badge.coins_reward} <CoinIcon />
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-gray-50 rounded-xl">
+            <div className="text-6xl mb-4">🎯</div>
+            <h3 className="text-xl font-bold text-gray-700 mb-2">¡Tu primer logro te espera!</h3>
+            <p className="text-gray-600">Completa misiones para desbloquear increíbles logros.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Available Achievements */}
+      <div>
+        <h2 className="text-2xl font-bold text-guayaquil-dark mb-4">Logros Disponibles</h2>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {availableBadges.map((badge) => (
+            <div key={badge.id} className="bg-white rounded-xl p-6 border-l-4 border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="flex items-center space-x-4 mb-4">
+                <div className="text-4xl bg-gray-100 rounded-full p-3 grayscale">
+                  {badge.icon}
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-700 text-lg">{badge.title}</h3>
+                  <p className="text-gray-600 text-sm">{badge.description}</p>
+                </div>
+                <div className="text-gray-400 text-2xl">🔒</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-600">
+                    <strong>Categoría:</strong> {badge.category.replace('_', ' ').toUpperCase()}
+                  </p>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    badge.rarity === 'common' ? 'bg-gray-100 text-gray-800' :
+                    badge.rarity === 'uncommon' ? 'bg-green-100 text-green-800' :
+                    badge.rarity === 'rare' ? 'bg-blue-100 text-blue-800' :
+                    badge.rarity === 'epic' ? 'bg-purple-100 text-purple-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {badge.rarity.toUpperCase()}
+                  </span>
+                </div>
+                {badge.coins_reward > 0 && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    <strong>Recompensa:</strong> {badge.coins_reward} monedas
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Mascot */}
+      <EntrepreneurMascot
+        message="¡Los logros son el reflejo de tu dedicación! Sigue adelante para desbloquear más. 🏆"
+        position="bottom-right"
+      />
+    </div>
+  );
+};
+
+// Rewards Component
+const Rewards = ({ user, onRefreshUser }) => {
+  const [rewards, setRewards] = useState([]);
+  const [myRedemptions, setMyRedemptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedReward, setSelectedReward] = useState(null);
+  const [showRedemptions, setShowRedemptions] = useState(false);
+
+  useEffect(() => {
+    loadRewards();
+    loadMyRedemptions();
+  }, [user]);
+
+  const loadRewards = async () => {
+    try {
+      const response = await axios.get('/rewards?available_only=true');
+      setRewards(response.data);
+    } catch (error) {
+      console.error('Error loading rewards:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMyRedemptions = async () => {
+    try {
+      const response = await axios.get('/rewards/my-redemptions');
+      setMyRedemptions(response.data);
+    } catch (error) {
+      console.error('Error loading redemptions:', error);
+    }
+  };
+
+  const canAfford = (reward) => {
+    return user.coins >= reward.coins_cost;
+  };
+
+  const isInStock = (reward) => {
+    return reward.stock === -1 || reward.stock_consumed < reward.stock;
+  };
+
+  const handleRedeem = async (reward) => {
+    if (!canAfford(reward) || !isInStock(reward)) return;
+
+    try {
+      const response = await axios.post(`/rewards/${reward.id}/redeem`);
+      
+      if (response.data.success) {
+        alert(`¡Recompensa canjeada exitosamente!\n\nTu código es: ${response.data.redemption_code}\n\n${response.data.instructions}`);
+        
+        // Open external URL if available
+        if (response.data.external_url) {
+          window.open(response.data.external_url, '_blank');
+        }
+        
+        // Refresh data
+        onRefreshUser();
+        loadRewards();
+        loadMyRedemptions();
+      }
+    } catch (error) {
+      console.error('Error redeeming reward:', error);
+      alert('Error al canjear recompensa: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
+  const getRewardIcon = (type) => {
+    const iconMap = {
+      'discount': '💰',
+      'training': '🎓',
+      'mentorship': '👨‍🏫',
+      'networking': '🤝',
+      'resources': '📚',
+      'certification': '📜',
+      'consultation': '💼',
+      'equipment': '🛠️',
+      'cash_prize': '💵'
+    };
+    return iconMap[type] || '🎁';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-guayaquil-lighter to-white flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (showRedemptions) {
+    return (
+      <div className="max-w-6xl mx-auto p-4">
+        <div className="mb-6">
+          <button
+            onClick={() => setShowRedemptions(false)}
+            className="flex items-center space-x-2 text-guayaquil-blue hover:text-guayaquil-primary"
+          >
+            <BackIcon />
+            <span>Volver a Recompensas</span>
+          </button>
+        </div>
+
+        <div className="bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white rounded-2xl p-6 mb-8">
+          <h1 className="text-3xl font-bold">📋 Mis Canjes</h1>
+          <p className="text-blue-100 mt-1">Historial de recompensas canjeadas</p>
+        </div>
+
+        {myRedemptions.length > 0 ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            {myRedemptions.map((redemption) => (
+              <div key={redemption.redemption.id} className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="text-3xl">{getRewardIcon(redemption.reward?.reward_type)}</div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-guayaquil-dark text-lg">
+                      {redemption.reward?.title || 'Recompensa'}
+                    </h3>
+                    <p className="text-guayaquil-text text-sm">
+                      {redemption.reward?.description || 'Sin descripción'}
+                    </p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    redemption.redemption.status === 'redeemed' ? 'bg-green-100 text-green-800' :
+                    redemption.redemption.status === 'used' ? 'bg-blue-100 text-blue-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {redemption.redemption.status === 'redeemed' ? 'Canjeado' :
+                     redemption.redemption.status === 'used' ? 'Usado' : 'Reservado'}
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <strong>Código:</strong> <code className="bg-white px-2 py-1 rounded">{redemption.redemption.redemption_code}</code>
+                    </div>
+                    <div>
+                      <strong>Canjeado:</strong> {new Date(redemption.redemption.redeemed_at).toLocaleDateString('es-EC')}
+                    </div>
+                    {redemption.reward?.partner_company && (
+                      <div>
+                        <strong>Socio:</strong> {redemption.reward.partner_company}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {redemption.redemption.qr_code_data && (
+                    <div className="mt-4 text-center">
+                      <img
+                        src={`data:image/png;base64,${redemption.redemption.qr_code_data}`}
+                        alt="QR Code"
+                        className="mx-auto"
+                        style={{ maxWidth: '150px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📋</div>
+            <h3 className="text-xl font-bold text-guayaquil-dark mb-2">No has canjeado recompensas</h3>
+            <p className="text-guayaquil-text">¡Empieza a completar misiones para ganar monedas!</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto p-4">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">🎁 Recompensas</h1>
+            <p className="text-blue-100 mt-1">Canjea tus monedas por beneficios exclusivos</p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <div className="text-4xl font-bold">{user.coins}</div>
+              <div className="text-blue-100">monedas disponibles</div>
+            </div>
+            <button
+              onClick={() => setShowRedemptions(true)}
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Mis Canjes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Rewards Grid */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {rewards.map((reward) => {
+          const affordable = canAfford(reward);
+          const inStock = isInStock(reward);
+          const available = affordable && inStock;
+          
+          return (
+            <div
+              key={reward.id}
+              className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all ${
+                available 
+                  ? 'hover:shadow-xl cursor-pointer' 
+                  : 'opacity-75'
+              }`}
+            >
+              {reward.image_url && (
+                <img
+                  src={reward.image_url}
+                  alt={reward.title}
+                  className="w-full h-48 object-cover"
+                />
+              )}
+              
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-3xl">{getRewardIcon(reward.reward_type)}</div>
+                  <div className="text-right">
+                    <div className="flex items-center space-x-1 text-lg font-bold text-guayaquil-blue">
+                      <span>{reward.coins_cost}</span>
+                      <CoinIcon />
+                    </div>
+                    {reward.stock !== -1 && (
+                      <div className="text-xs text-guayaquil-text">
+                        {reward.stock - reward.stock_consumed} disponibles
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <h3 className="font-bold text-guayaquil-dark text-lg mb-2">{reward.title}</h3>
+                <p className="text-guayaquil-text text-sm mb-4">{reward.description}</p>
+                
+                <div className="space-y-2 text-sm text-guayaquil-text mb-4">
+                  <div>
+                    <strong>Valor:</strong> {reward.value}
+                  </div>
+                  {reward.partner_company && (
+                    <div>
+                      <strong>Socio:</strong> {reward.partner_company}
+                    </div>
+                  )}
+                  {reward.available_until && (
+                    <div>
+                      <strong>Válido hasta:</strong> {new Date(reward.available_until).toLocaleDateString('es-EC')}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => handleRedeem(reward)}
+                  disabled={!available}
+                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
+                    available
+                      ? 'bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white hover:from-blue-600 hover:to-blue-700'
+                      : !affordable
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      : 'bg-red-200 text-red-700 cursor-not-allowed'
+                  }`}
+                >
+                  {!affordable 
+                    ? `Necesitas ${reward.coins_cost - user.coins} monedas más`
+                    : !inStock 
+                    ? 'Agotado'
+                    : 'Canjear'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {rewards.length === 0 && (
+        <div className="text-center py-12">
+          <div className="text-6xl mb-4">🎁</div>
+          <h3 className="text-xl font-bold text-guayaquil-dark mb-2">No hay recompensas disponibles</h3>
+          <p className="text-guayaquil-text">Pronto habrá nuevas recompensas para canjear.</p>
+        </div>
+      )}
+
+      {/* Mascot */}
+      <EntrepreneurMascot
+        message="¡Gana monedas completando misiones y canjéalas por increíbles beneficios! 🎁"
+        position="bottom-right"
+      />
+    </div>
+  );
+};
+
+// Profile Component
+const Profile = ({ user, onRefreshUser }) => {
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [userDocuments, setUserDocuments] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const { logout } = useAuth();
+
+  useEffect(() => {
+    loadUserDocuments();
+    loadNotifications();
+  }, []);
+
+  const loadUserDocuments = async () => {
+    try {
+      const response = await axios.get(`/documents/user/${user.id}`);
+      setUserDocuments(response.data);
+    } catch (error) {
+      console.error('Error loading user documents:', error);
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const response = await axios.get('/notifications?limit=10');
+      setNotifications(response.data);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await axios.put('/notifications/mark-all-read');
+      loadNotifications();
+    } catch (error) {
+      console.error('Error marking notifications as read:', error);
+    }
+  };
+
+  const getDocumentStatusBadge = (status) => {
+    const statusMap = {
+      'pending': { color: 'yellow', text: 'Pendiente' },
+      'approved': { color: 'green', text: 'Aprobado' },
+      'rejected': { color: 'red', text: 'Rechazado' },
+      'revision_required': { color: 'orange', text: 'Revisión Requerida' }
+    };
+    return statusMap[status] || { color: 'gray', text: 'Desconocido' };
+  };
+
+  const handleDocumentUploadSuccess = (message) => {
+    alert(message);
+    loadUserDocuments();
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-4">
+      {showQRGenerator && (
+        <QRGenerator user={user} onClose={() => setShowQRGenerator(false)} />
+      )}
+
+      {showDocumentUpload && (
+        <DocumentUpload
+          user={user}
+          onClose={() => setShowDocumentUpload(false)}
+          onSuccess={handleDocumentUploadSuccess}
+        />
+      )}
+
+      {/* Header */}
+      <div className="bg-gradient-to-r from-guayaquil-blue to-guayaquil-primary text-white rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-3xl">
+              👤
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">{user.nombre} {user.apellido}</h1>
+              <p className="text-blue-100 mt-1">{user.nombre_emprendimiento}</p>
+              <div className="flex items-center space-x-4 mt-2 text-sm">
+                <span>📍 {user.ciudad}</span>
+                <span>🆔 {user.cedula}</span>
+                {user.cohorte && <span>👥 {user.cohorte}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-4xl font-bold">{user.points}</div>
+            <div className="text-blue-100">puntos totales</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Statistics */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h2 className="text-xl font-bold text-guayaquil-dark mb-4">📊 Estadísticas</h2>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-guayaquil-lighter rounded-lg">
+              <div className="flex items-center space-x-2">
+                <StarIcon />
+                <span className="font-medium">Puntos Totales</span>
+              </div>
+              <span className="font-bold text-guayaquil-blue">{user.points}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <CoinIcon />
+                <span className="font-medium">Monedas</span>
+              </div>
+              <span className="font-bold text-blue-600">{user.coins}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <span>✅</span>
+                <span className="font-medium">Misiones Completadas</span>
+              </div>
+              <span className="font-bold text-green-600">{user.completed_missions.length}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <span>🔥</span>
+                <span className="font-medium">Racha Actual</span>
+              </div>
+              <span className="font-bold text-orange-600">{user.current_streak} días</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <span>🏆</span>
+                <span className="font-medium">Mejor Racha</span>
+              </div>
+              <span className="font-bold text-purple-600">{user.best_streak} días</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h2 className="text-xl font-bold text-guayaquil-dark mb-4">⚡ Acciones Rápidas</h2>
+          
+          <div className="space-y-3">
+            <button
+              onClick={() => setShowQRGenerator(true)}
+              className="w-full flex items-center space-x-3 p-3 bg-guayaquil-lighter hover:bg-guayaquil-light rounded-lg transition-colors"
+            >
+              <QRIcon />
+              <span className="font-medium">Generar QR de Estado</span>
+            </button>
+            
+            <button
+              onClick={() => setShowDocumentUpload(true)}
+              className="w-full flex items-center space-x-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              <UploadIcon />
+              <span className="font-medium">Subir Documento</span>
+            </button>
+            
+            <button
+              onClick={markAllNotificationsRead}
+              className="w-full flex items-center space-x-3 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+            >
+              <NotificationIcon />
+              <span className="font-medium">Marcar Notificaciones Leídas</span>
+            </button>
+            
+            <button
+              onClick={logout}
+              className="w-full flex items-center space-x-3 p-3 bg-red-50 hover:bg-red-100 rounded-lg transition-colors text-red-700"
+            >
+              <span>🚪</span>
+              <span className="font-medium">Cerrar Sesión</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Documents */}
+      <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-xl font-bold text-guayaquil-dark mb-4">📋 Mis Documentos</h2>
+        
+        {userDocuments.length > 0 ? (
+          <div className="space-y-3">
+            {userDocuments.map((doc) => {
+              const badge = getDocumentStatusBadge(doc.status);
+              return (
+                <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <DocumentIcon />
+                    <div>
+                      <h4 className="font-medium text-guayaquil-dark">
+                        {doc.document_type.replace('_', ' ').toUpperCase()}
+                      </h4>
+                      <p className="text-sm text-guayaquil-text">{doc.file_name}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      badge.color === 'green' ? 'bg-green-100 text-green-800' :
+                      badge.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                      badge.color === 'red' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {badge.text}
+                    </span>
+                    <p className="text-xs text-guayaquil-text mt-1">
+                      {new Date(doc.uploaded_at).toLocaleDateString('es-EC')}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-guayaquil-text">
+            <DocumentIcon />
+            <p className="mt-2">No has subido documentos aún</p>
+            <button
+              onClick={() => setShowDocumentUpload(true)}
+              className="mt-2 text-guayaquil-blue hover:text-guayaquil-primary font-medium"
+            >
+              Subir tu primer documento
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Notifications */}
+      <div className="mt-8 bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-xl font-bold text-guayaquil-dark mb-4">🔔 Notificaciones Recientes</h2>
+        
+        {notifications.length > 0 ? (
+          <div className="space-y-3">
+            {notifications.slice(0, 5).map((notification) => (
+              <div key={notification.id} className={`p-3 rounded-lg border-l-4 ${
+                notification.read 
+                  ? 'bg-gray-50 border-gray-300' 
+                  : 'bg-blue-50 border-blue-500'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-guayaquil-dark">{notification.title}</h4>
+                  <span className="text-xs text-guayaquil-text">
+                    {new Date(notification.created_at).toLocaleDateString('es-EC')}
+                  </span>
+                </div>
+                <p className="text-sm text-guayaquil-text mt-1">{notification.message}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-guayaquil-text">
+            <NotificationIcon />
+            <p className="mt-2">No tienes notificaciones</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Leagues Component
 const Leagues = ({ user }) => {
   const [currentLeagues, setCurrentLeagues] = useState([]);
