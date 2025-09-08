@@ -1385,6 +1385,25 @@ async def initialize_demo_content():
     
     await db.badges.insert_many(demo_badges)
     print(f"Initialized {len(demo_badges)} demo badges")
+    
+    # Initialize demo admin user
+    existing_admin = await db.users.find_one({"cedula": "0000000000"})
+    if not existing_admin:
+        admin_user = User(
+            nombre="Admin",
+            apellido="Sistema",
+            cedula="0000000000",
+            email="admin@impulsaguayaquil.com",
+            nombre_emprendimiento="Sistema Administrativo",
+            hashed_password=get_password_hash("admin"),
+            role=UserRole.ADMIN,
+            rank=UserRank.EMPRENDEDOR_MASTER,
+            points=10000,
+            coins=5000,
+            ciudad="Guayaquil"
+        )
+        await db.users.insert_one(admin_user.dict())
+        print("Initialized demo admin user: 0000000000 / admin")
 
 # Initialize demo content on startup
 async def startup_event():
