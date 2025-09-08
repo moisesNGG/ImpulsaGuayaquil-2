@@ -2687,3 +2687,659 @@ async def review_evidence(
         "success": True,
         "message": f"Evidence {'approved' if review_data.status == DocumentStatus.APPROVED else 'rejected'} successfully"
     }
+
+# Enhanced Reward routes with redemption system
+@api_router.post("/rewards", response_model=Reward)
+async def create_reward(reward_data: RewardCreate, current_user: User = Depends(get_admin_user)):
+    reward = Reward(**reward_data.dict())
+    await db.rewards.insert_one(reward.dict())
+    return reward
+
+@api_router.get("/rewards", response_model=List[Reward])
+async def get_rewards(
+    reward_type: Optional[RewardType] = None,
+    ciudad: Optional[str] = None,
+    available_only: bool = True,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user)
+):
+    query = {}
+    if reward_type:
+        query["reward_type"] = reward_type
+    if ciudad:
+        query["ciudad"] = ciudad
+    if available_only:
+        query["$or"] = [
+            {"available_until": None},
+            {"available_until": {"$gte": datetime.utcnow()}}
+        ]
+        # Also check stock
+        query["$where"] = "this.stock == -1 || this.stock > this.stock_consumed"
+    
+    rewards = await db.rewards.find(query).skip(skip).limit(limit).to_list(limit)
+    return [Reward(**reward) for reward in rewards]
+
+@api_router.get("/rewards/{reward_id}", response_model=Reward)
+async def get_reward(reward_id: str):
+    reward = await db.rewards.find_one({"id": reward_id})
+    if not reward:
+        raise HTTPException(status_code=404, detail="Reward not found")
+    return Reward(**reward)
+
+@api_router.put("/rewards/{reward_id}", response_model=Reward)
+async def update_reward(reward_id: str, reward_data: RewardUpdate, current_user: User = Depends(get_admin_user)):
+    reward = await db.rewards.find_one({"id": reward_id})
+    if not reward:
+        raise HTTPException(status_code=404, detail="Reward not found")
+    
+    update_data = {k: v for k, v in reward_data.dict().items() if v is not None}
+    if update_data:
+        await db.rewards.update_one({"id": reward_id}, {"$set": update_data})
+    
+    updated_reward = await db.rewards.find_one({"id": reward_id})
+    return Reward(**updated_reward)
+
+@api_router.delete("/rewards/{reward_id}")
+async def delete_reward(reward_id: str, current_user: User = Depends(get_admin_user)):
+    result = await db.rewards.delete_one({"id": reward_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Reward not found")
+    return {"message": "Reward deleted successfully"}
+
+@api_router.post("/rewards/{reward_id}/redeem")
+async def redeem_reward(reward_id: str, current_user: User = Depends(get_current_user)):
+    """Redeem a reward with coins"""
+    reward = await db.rewards.find_one({"id": reward_id})
+    if not reward:
+        raise HTTPException(status_code=404, detail="Reward not found")
+    
+    reward_obj = Reward(**reward)
+    
+    # Check if reward is available
+    if reward_obj.available_until and datetime.utcnow() > reward_obj.available_until:
+        raise HTTPException(status_code=400, detail="Reward has expired")
+    
+    # Check stock
+    if reward_obj.stock != -1 and reward_obj.stock_consumed >= reward_obj.stock:
+        raise HTTPException(status_code=400, detail="Reward is out of stock")
+    
+    # Check user has enough coins
+    if current_user.coins < reward_obj.coins_cost:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient coins. You need {reward_obj.coins_cost} coins but have {current_user.coins}"
+        )
+    
+    # Generate redemption code
+    redemption_code = secrets.token_hex(8).upper()
+    
+    # Create redemption record
+    redemption = RewardRedemption(
+        user_id=current_user.id,
+        reward_id=reward_id,
+        redemption_code=redemption_code
+    )
+    
+    # Generate QR code for physical redemption if needed
+    if reward_obj.reward_type in [RewardType.DISCOUNT, RewardType.CONSULTATION, RewardType.EQUIPMENT]:
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(redemption_code)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffered = BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        redemption.qr_code_data = img_str
+    
+    await db.reward_redemptions.insert_one(redemption.dict())
+    
+    # Update user coins and reward stock
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$inc": {"coins": -reward_obj.coins_cost}}
+    )
+    
+    await db.rewards.update_one(
+        {"id": reward_id},
+        {"$inc": {"stock_consumed": 1}}
+    )
+    
+    # Create notification
+    notification = Notification(
+        user_id=current_user.id,
+        type=NotificationType.REWARD_AVAILABLE,
+        title="¡Recompensa Canjeada!",
+        message=f"Has canjeado '{reward_obj.title}'. Tu código es: {redemption_code}",
+        data={
+            "reward_id": reward_id,
+            "redemption_code": redemption_code,
+            "reward_title": reward_obj.title
+        }
+    )
+    await db.notifications.insert_one(notification.dict())
+    
+    return {
+        "success": True,
+        "redemption_code": redemption_code,
+        "qr_code": f"data:image/png;base64,{redemption.qr_code_data}" if redemption.qr_code_data else None,
+        "message": f"¡Recompensa canjeada exitosamente! Tu código es: {redemption_code}",
+        "instructions": reward_obj.terms_conditions,
+        "external_url": reward_obj.external_url
+    }
+
+@api_router.get("/rewards/my-redemptions")
+async def get_my_redemptions(current_user: User = Depends(get_current_user)):
+    """Get current user's reward redemptions"""
+    redemptions = await db.reward_redemptions.find({"user_id": current_user.id}).to_list(100)
+    
+    # Enrich with reward data
+    enriched_redemptions = []
+    for redemption in redemptions:
+        reward = await db.rewards.find_one({"id": redemption["reward_id"]})
+        enriched_redemptions.append({
+            "redemption": RewardRedemption(**redemption),
+            "reward": Reward(**reward) if reward else None
+        })
+    
+    return enriched_redemptions
+
+# League System routes
+@api_router.post("/leagues", response_model=League)
+async def create_league(league_data: LeagueCreate, current_user: User = Depends(get_admin_user)):
+    """Create a new league"""
+    league = League(**league_data.dict())
+    await db.leagues.insert_one(league.dict())
+    return league
+
+@api_router.get("/leagues/current")
+async def get_current_leagues(
+    ciudad: Optional[str] = None,
+    cohorte: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """Get currently active leagues"""
+    now = datetime.utcnow()
+    query = {
+        "is_active": True,
+        "start_date": {"$lte": now},
+        "end_date": {"$gte": now}
+    }
+    
+    if ciudad:
+        query["ciudad"] = ciudad
+    if cohorte:
+        query["cohorte"] = cohorte
+    
+    leagues = await db.leagues.find(query).to_list(100)
+    return [League(**league) for league in leagues]
+
+@api_router.get("/leagues/{league_id}/leaderboard")
+async def get_league_leaderboard(league_id: str, current_user: User = Depends(get_current_user)):
+    """Get league leaderboard"""
+    league = await db.leagues.find_one({"id": league_id})
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    league_obj = League(**league)
+    
+    # Get participants with their weekly XP
+    participants = await db.users.find(
+        {"id": {"$in": league_obj.participants}}
+    ).to_list(1000)
+    
+    # Sort by weekly XP
+    sorted_participants = sorted(
+        participants, 
+        key=lambda x: x.get("weekly_xp", 0), 
+        reverse=True
+    )
+    
+    leaderboard = []
+    for i, participant in enumerate(sorted_participants[:100]):  # Top 100
+        leaderboard.append({
+            "position": i + 1,
+            "user": {
+                "id": participant["id"],
+                "nombre": participant["nombre"],
+                "apellido": participant["apellido"],
+                "emprendimiento": participant["nombre_emprendimiento"]
+            },
+            "weekly_xp": participant.get("weekly_xp", 0),
+            "total_points": participant.get("points", 0),
+            "current_streak": participant.get("current_streak", 0)
+        })
+    
+    return {
+        "league": league_obj,
+        "leaderboard": leaderboard,
+        "total_participants": len(league_obj.participants)
+    }
+
+@api_router.post("/leagues/{league_id}/join")
+async def join_league(league_id: str, current_user: User = Depends(get_current_user)):
+    """Join a league"""
+    league = await db.leagues.find_one({"id": league_id})
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    league_obj = League(**league)
+    
+    # Check if user can join (same city/cohorte)
+    if league_obj.ciudad != current_user.ciudad:
+        raise HTTPException(status_code=400, detail="You can only join leagues in your city")
+    
+    if league_obj.cohorte and league_obj.cohorte != current_user.cohorte:
+        raise HTTPException(status_code=400, detail="You can only join leagues in your cohorte")
+    
+    # Check if already joined
+    if current_user.id in league_obj.participants:
+        raise HTTPException(status_code=400, detail="Already joined this league")
+    
+    # Add user to league
+    await db.leagues.update_one(
+        {"id": league_id},
+        {"$push": {"participants": current_user.id}}
+    )
+    
+    return {"success": True, "message": "Successfully joined league"}
+
+# Badge and Achievement routes
+@api_router.post("/badges", response_model=Badge)
+async def create_badge(badge_data: Badge, current_user: User = Depends(get_admin_user)):
+    """Create a new badge"""
+    await db.badges.insert_one(badge_data.dict())
+    return badge_data
+
+@api_router.get("/badges", response_model=List[Badge])
+async def get_badges(
+    category: Optional[BadgeCategory] = None,
+    rarity: Optional[BadgeRarity] = None
+):
+    """Get all badges"""
+    query = {}
+    if category:
+        query["category"] = category
+    if rarity:
+        query["rarity"] = rarity
+    
+    badges = await db.badges.find(query).to_list(100)
+    return [Badge(**badge) for badge in badges]
+
+@api_router.get("/badges/user/{user_id}")
+async def get_user_badges(user_id: str, current_user: User = Depends(get_current_user)):
+    """Get user's earned badges"""
+    if current_user.role not in [UserRole.ADMIN, UserRole.REVISOR] and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    user_badges = await db.user_badges.find({"user_id": user_id}).to_list(100)
+    
+    # Enrich with badge data
+    enriched_badges = []
+    for user_badge in user_badges:
+        badge = await db.badges.find_one({"id": user_badge["badge_id"]})
+        if badge:
+            enriched_badges.append({
+                "user_badge": UserBadge(**user_badge),
+                "badge": Badge(**badge)
+            })
+    
+    return enriched_badges
+
+# Notification routes
+@api_router.get("/notifications")
+async def get_notifications(
+    unread_only: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """Get user notifications"""
+    query = {"user_id": current_user.id}
+    if unread_only:
+        query["read"] = False
+    
+    notifications = await db.notifications.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    return [Notification(**notification) for notification in notifications]
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user)):
+    """Mark notification as read"""
+    result = await db.notifications.update_one(
+        {"id": notification_id, "user_id": current_user.id},
+        {"$set": {"read": True}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    return {"success": True}
+
+@api_router.put("/notifications/mark-all-read")
+async def mark_all_notifications_read(current_user: User = Depends(get_current_user)):
+    """Mark all notifications as read"""
+    await db.notifications.update_many(
+        {"user_id": current_user.id, "read": False},
+        {"$set": {"read": True}}
+    )
+    
+    return {"success": True}
+
+# Admin and Analytics routes
+@api_router.get("/admin/stats", response_model=AdminStats)
+async def get_admin_stats(current_user: User = Depends(get_admin_user)):
+    """Get comprehensive admin statistics"""
+    # Basic counts
+    total_users = await db.users.count_documents({})
+    total_missions = await db.missions.count_documents({})
+    
+    # Calculate total completed missions
+    users = await db.users.find({}).to_list(10000)
+    total_completed_missions = sum(len(user.get("completed_missions", [])) for user in users)
+    
+    # Calculate total points and coins awarded
+    total_points_awarded = sum(user.get("points", 0) for user in users)
+    total_coins_awarded = sum(user.get("coins", 0) for user in users)
+    
+    # Active users (last week and month)
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    month_ago = datetime.utcnow() - timedelta(days=30)
+    
+    active_users_last_week = await db.users.count_documents({
+        "last_activity": {"$gte": week_ago}
+    })
+    
+    active_users_last_month = await db.users.count_documents({
+        "last_activity": {"$gte": month_ago}
+    })
+    
+    # Most popular missions
+    mission_completion_counts = {}
+    for user in users:
+        completed_missions = user.get("completed_missions", [])
+        for mission_id in completed_missions:
+            mission_completion_counts[mission_id] = mission_completion_counts.get(mission_id, 0) + 1
+    
+    # Get mission details for top missions
+    most_popular_missions = []
+    for mission_id, count in sorted(mission_completion_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+        mission = await db.missions.find_one({"id": mission_id})
+        if mission:
+            most_popular_missions.append({
+                "mission": Mission(**mission),
+                "completion_count": count
+            })
+    
+    # Completion rate by competence area
+    competence_stats = {}
+    for competence in CompetenceArea:
+        area_missions = await db.missions.find({"competence_area": competence.value}).to_list(1000)
+        total_area_missions = len(area_missions)
+        
+        if total_area_missions > 0:
+            area_mission_ids = [m["id"] for m in area_missions]
+            completed_in_area = sum(
+                len([m for m in user.get("completed_missions", []) if m in area_mission_ids])
+                for user in users
+            )
+            
+            # Calculate completion rate
+            possible_completions = total_users * total_area_missions
+            completion_rate = (completed_in_area / possible_completions * 100) if possible_completions > 0 else 0
+            competence_stats[competence.value] = completion_rate
+    
+    # User distribution by city
+    user_distribution_by_city = {}
+    for user in users:
+        city = user.get("ciudad", "Unknown")
+        user_distribution_by_city[city] = user_distribution_by_city.get(city, 0) + 1
+    
+    # Weekly engagement trend (simplified)
+    weekly_engagement_trend = []
+    for i in range(8):  # Last 8 weeks
+        week_start = datetime.utcnow() - timedelta(weeks=i+1)
+        week_end = datetime.utcnow() - timedelta(weeks=i)
+        
+        active_users_week = await db.users.count_documents({
+            "last_activity": {"$gte": week_start, "$lt": week_end}
+        })
+        
+        weekly_engagement_trend.append({
+            "week": f"Week -{i}",
+            "active_users": active_users_week,
+            "date_range": {
+                "start": week_start.isoformat(),
+                "end": week_end.isoformat()
+            }
+        })
+    
+    # Top performers
+    top_performers = sorted(users, key=lambda x: x.get("points", 0), reverse=True)[:10]
+    top_performers_data = []
+    for user in top_performers:
+        top_performers_data.append({
+            "user": {
+                "id": user["id"],
+                "nombre": user["nombre"],
+                "apellido": user["apellido"],
+                "emprendimiento": user["nombre_emprendimiento"]
+            },
+            "points": user.get("points", 0),
+            "completed_missions": len(user.get("completed_missions", [])),
+            "current_streak": user.get("current_streak", 0)
+        })
+    
+    # Event attendance stats (placeholder)
+    event_attendance_stats = {
+        "total_events": await db.events.count_documents({}),
+        "upcoming_events": await db.events.count_documents({"date": {"$gte": datetime.utcnow()}}),
+        "average_registration_rate": 0.75  # This would need more complex calculation
+    }
+    
+    # Reward redemption stats
+    reward_redemptions = await db.reward_redemptions.find({}).to_list(10000)
+    reward_redemption_stats = {
+        "total_redemptions": len(reward_redemptions),
+        "total_coins_spent": sum(
+            reward["coins_cost"] for redemption in reward_redemptions
+            for reward in [await db.rewards.find_one({"id": redemption["reward_id"]})]
+            if reward
+        ),
+        "most_popular_rewards": {}  # Would need aggregation
+    }
+    
+    return AdminStats(
+        total_users=total_users,
+        total_missions=total_missions,
+        total_completed_missions=total_completed_missions,
+        total_points_awarded=total_points_awarded,
+        total_coins_awarded=total_coins_awarded,
+        active_users_last_week=active_users_last_week,
+        active_users_last_month=active_users_last_month,
+        most_popular_missions=most_popular_missions,
+        completion_rate_by_competence=competence_stats,
+        user_distribution_by_city=user_distribution_by_city,
+        weekly_engagement_trend=weekly_engagement_trend,
+        top_performers=top_performers_data,
+        event_attendance_stats=event_attendance_stats,
+        reward_redemption_stats=reward_redemption_stats
+    )
+
+@api_router.get("/admin/impact-metrics")
+async def get_impact_metrics(
+    period: str = "monthly",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: User = Depends(get_admin_user)
+):
+    """Get impact metrics for reporting"""
+    # Parse dates
+    if start_date:
+        start_dt = datetime.fromisoformat(start_date)
+    else:
+        if period == "weekly":
+            start_dt = datetime.utcnow() - timedelta(weeks=1)
+        elif period == "monthly":
+            start_dt = datetime.utcnow() - timedelta(days=30)
+        elif period == "quarterly":
+            start_dt = datetime.utcnow() - timedelta(days=90)
+        else:
+            start_dt = datetime.utcnow() - timedelta(days=30)
+    
+    if end_date:
+        end_dt = datetime.fromisoformat(end_date)
+    else:
+        end_dt = datetime.utcnow()
+    
+    # Get users in date range
+    users = await db.users.find({
+        "created_at": {"$gte": start_dt, "$lte": end_dt}
+    }).to_list(10000)
+    
+    total_entrepreneurs = len(users)
+    active_entrepreneurs = len([u for u in users if u.get("last_activity", start_dt) >= start_dt])
+    
+    # Count specific achievements
+    missions_completed = sum(len(user.get("completed_missions", [])) for user in users)
+    
+    # Count document submissions (proxies for business formalization)
+    ruc_registrations = await db.documents.count_documents({
+        "document_type": "ruc",
+        "status": "approved",
+        "uploaded_at": {"$gte": start_dt, "$lte": end_dt}
+    })
+    
+    pitch_videos_submitted = await db.evidences.count_documents({
+        "document_type": "pitch_video",
+        "uploaded_at": {"$gte": start_dt, "$lte": end_dt}
+    })
+    
+    business_plans_completed = await db.evidences.count_documents({
+        "document_type": "business_plan",
+        "status": "approved",
+        "uploaded_at": {"$gte": start_dt, "$lte": end_dt}
+    })
+    
+    # Event attendance (would need event registration tracking)
+    events_attended = await db.events.count_documents({
+        "date": {"$gte": start_dt, "$lte": end_dt}
+    }) * 0.7  # Assume 70% attendance rate
+    
+    # Networking connections (from networking missions)
+    networking_connections = await db.evidences.count_documents({
+        "mission_id": {"$in": await get_networking_mission_ids()},
+        "status": "approved",
+        "uploaded_at": {"$gte": start_dt, "$lte": end_dt}
+    }) * 5  # Assume 5 connections per networking mission
+    
+    return ImpactMetrics(
+        period=period,
+        date_range={"start": start_dt, "end": end_dt},
+        total_entrepreneurs=total_entrepreneurs,
+        active_entrepreneurs=active_entrepreneurs,
+        missions_completed=missions_completed,
+        events_attended=int(events_attended),
+        business_plans_completed=business_plans_completed,
+        ruc_registrations=ruc_registrations,
+        pitch_videos_submitted=pitch_videos_submitted,
+        networking_connections=networking_connections,
+        mentorship_sessions=0,  # Would need mentorship tracking
+        funding_applications=0,  # Would need integration with funding platforms
+        jobs_created=0,  # Would need manual reporting
+        revenue_generated=0.0,  # Would need manual reporting
+        participant_satisfaction=4.2,  # Would need surveys
+        knowledge_improvement=0.85,  # Would need pre/post assessments
+        business_survival_rate=0.73  # Would need long-term tracking
+    )
+
+async def get_networking_mission_ids():
+    """Helper function to get networking mission IDs"""
+    missions = await db.missions.find({"type": "networking_task"}).to_list(100)
+    return [mission["id"] for mission in missions]
+
+@api_router.get("/admin/export/users")
+async def export_users(
+    format: str = "csv",
+    ciudad: Optional[str] = None,
+    cohorte: Optional[str] = None,
+    current_user: User = Depends(get_admin_user)
+):
+    """Export users data"""
+    query = {}
+    if ciudad:
+        query["ciudad"] = ciudad
+    if cohorte:
+        query["cohorte"] = cohorte
+    
+    users = await db.users.find(query).to_list(10000)
+    
+    if format.lower() == "csv":
+        # Create CSV data
+        csv_data = "ID,Nombre,Apellido,Cedula,Email,Emprendimiento,Ciudad,Cohorte,Puntos,Monedas,Misiones Completadas,Racha Actual,Fecha Registro\n"
+        
+        for user in users:
+            csv_data += f"{user['id']},{user['nombre']},{user['apellido']},{user['cedula']},{user['email']},{user['nombre_emprendimiento']},{user.get('ciudad', '')},{user.get('cohorte', '')},{user.get('points', 0)},{user.get('coins', 0)},{len(user.get('completed_missions', []))},{user.get('current_streak', 0)},{user.get('created_at', '').isoformat() if user.get('created_at') else ''}\n"
+        
+        return JSONResponse(
+            content={"csv_data": csv_data},
+            headers={"Content-Type": "application/json"}
+        )
+    
+    return {"users": users}
+
+@api_router.get("/admin/export/missions-progress")
+async def export_missions_progress(
+    format: str = "csv",
+    competence_area: Optional[CompetenceArea] = None,
+    current_user: User = Depends(get_admin_user)
+):
+    """Export mission progress data"""
+    query = {}
+    if competence_area:
+        query["competence_area"] = competence_area
+    
+    missions = await db.missions.find(query).to_list(1000)
+    users = await db.users.find({}).to_list(10000)
+    
+    if format.lower() == "csv":
+        csv_data = "Mission ID,Mission Title,Competence Area,Total Completions,Completion Rate,Avg Score\n"
+        
+        for mission in missions:
+            completions = sum(1 for user in users if mission["id"] in user.get("completed_missions", []))
+            completion_rate = (completions / len(users) * 100) if users else 0
+            
+            # Get average score for quiz missions
+            attempts = await db.mission_attempts.find({"mission_id": mission["id"], "status": "success"}).to_list(1000)
+            avg_score = sum(attempt.get("score", 0) for attempt in attempts) / len(attempts) if attempts else 0
+            
+            csv_data += f"{mission['id']},{mission['title']},{mission['competence_area']},{completions},{completion_rate:.1f},{avg_score:.1f}\n"
+        
+        return JSONResponse(
+            content={"csv_data": csv_data},
+            headers={"Content-Type": "application/json"}
+        )
+    
+    return {"missions": missions}
+
+# Weekly league reset (would be called by cron job)
+@api_router.post("/admin/reset-weekly-leagues")
+async def reset_weekly_leagues(current_user: User = Depends(get_admin_user)):
+    """Reset weekly XP for all users and create new leagues"""
+    # Reset weekly XP for all users
+    await db.users.update_many({}, {"$set": {"weekly_xp": 0}})
+    
+    # End current leagues
+    await db.leagues.update_many(
+        {"is_active": True, "end_date": {"$lte": datetime.utcnow()}},
+        {"$set": {"is_active": False}}
+    )
+    
+    return {"success": True, "message": "Weekly leagues reset successfully"}
+
+# Mount the API router
+app.include_router(api_router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
