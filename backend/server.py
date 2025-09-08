@@ -1877,6 +1877,29 @@ app.add_middleware(
 async def root():
     return {"message": "Impulsa Guayaquil API - Empowering Entrepreneurs v2.0"}
 
+@api_router.post("/init-admin")
+async def init_admin():
+    """Initialize admin user for demo purposes"""
+    existing_admin = await db.users.find_one({"cedula": "0000000000"})
+    if existing_admin:
+        return {"message": "Admin user already exists"}
+    
+    admin_user = User(
+        nombre="Admin",
+        apellido="Sistema",
+        cedula="0000000000",
+        email="admin@impulsaguayaquil.com",
+        nombre_emprendimiento="Sistema Administrativo",
+        hashed_password=get_password_hash("admin"),
+        role=UserRole.ADMIN,
+        rank=UserRank.EMPRENDEDOR_MASTER,
+        points=10000,
+        coins=5000,
+        ciudad="Guayaquil"
+    )
+    await db.users.insert_one(admin_user.dict())
+    return {"message": "Admin user created successfully", "cedula": "0000000000", "password": "admin"}
+
 # Authentication routes
 @api_router.post("/register", response_model=UserResponse)
 async def register(user_data: UserCreate):
