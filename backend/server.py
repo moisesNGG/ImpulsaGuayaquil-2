@@ -2704,8 +2704,7 @@ async def get_rewards(
     ciudad: Optional[str] = None,
     available_only: bool = True,
     skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_current_user)
+    limit: int = 100
 ):
     query = {}
     if reward_type:
