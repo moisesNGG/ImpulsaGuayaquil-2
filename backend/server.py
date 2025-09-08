@@ -1863,10 +1863,20 @@ async def check_mission_cooldown(user_id: str, mission_id: str) -> bool:
     
     return True
 
-# CORS middleware
+# CORS middleware - ACTUALIZAR ESTA PARTE
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "*",  # Permite todas las origins para desarrollo
+        "https://startup-quest-2.preview.emergentagent.com",
+        "http://34.174.222.207:3000",
+        "http://34.174.222.207:8001", 
+        "http://localhost:3000",
+        "capacitor://localhost",  # IMPORTANTE para APK
+        "ionic://localhost",      # IMPORTANTE para APK
+        "http://localhost",       # IMPORTANTE para APK
+        "https://localhost"       # IMPORTANTE para APK
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
