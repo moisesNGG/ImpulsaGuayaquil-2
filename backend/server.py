@@ -694,6 +694,9 @@ class ImpactMetrics(BaseModel):
 # Initialize demo content
 async def initialize_demo_content():
     """Initialize comprehensive demo content"""
+    # Clean up old missions that don't have competence_area
+    await db.missions.delete_many({"competence_area": {"$exists": False}})
+    
     # Check if content already exists
     existing_missions = await db.missions.count_documents({})
     if existing_missions > 0:
