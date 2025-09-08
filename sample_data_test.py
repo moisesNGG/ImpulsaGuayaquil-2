@@ -6,7 +6,7 @@ import sys
 from typing import Dict, Any, List, Optional
 
 # Get the backend URL from the frontend/.env file
-BACKEND_URL = "https://apk-build-helper.preview.emergentagent.com/api"
+BACKEND_URL = "https://startup-quest-2.preview.emergentagent.com/api"
 
 # Test results tracking
 test_results = {
